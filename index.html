@@ -113,9 +113,12 @@
   <div class="panel table-scroll">
     <div id="tabla-registros"></div>
     <div class="row-actions">
+      <button class="btn secondary" onclick="document.getElementById('csv-input').click()">Importar CSV</button>
+      <input type="file" id="csv-input" accept=".csv,text/csv" style="display:none" onchange="importarCSV(this.files[0])">
       <button class="btn secondary" onclick="exportarCSV()">Exportar CSV</button>
       <button class="btn danger" onclick="borrarTodo()">Borrar todos los datos</button>
     </div>
+    <div class="msg" id="csv-msg"></div>
   </div>
 
 </main>
@@ -308,6 +311,73 @@ function render(){
         <td class="${r.faltantes>0?"num-def":"muted"}">${fmt(r.faltantes)}</td>
         <td><button class="btn danger" onclick="eliminar('${r.id}')">Eliminar</button></td></tr>`).join("") +
       `</tbody></table>`;
+}
+
+function msgCSV(t, tipo){
+  const m = document.getElementById("csv-msg");
+  m.textContent = t; m.className = "msg " + tipo;
+  clearTimeout(m._t); m._t = setTimeout(()=>{ m.className = "msg"; }, 6000);
+}
+
+function parseLineaCSV(linea){
+  const out = []; let cur = ""; let enComillas = false;
+  for(let i = 0; i < linea.length; i++){
+    const ch = linea[i];
+    if(enComillas){
+      if(ch === '"' && linea[i+1] === '"'){ cur += '"'; i++; }
+      else if(ch === '"'){ enComillas = false; }
+      else cur += ch;
+    } else {
+      if(ch === '"') enComillas = true;
+      else if(ch === ',' || ch === ';'){ out.push(cur); cur = ""; }
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
+async function importarCSV(file){
+  if(!file) return;
+  try{
+    const texto = (await file.text()).replace(/^\uFEFF/, "");
+    const lineas = texto.split(/\r?\n/).filter(l => l.trim());
+    if(lineas.length < 2){ msgCSV("El CSV no tiene datos.","err"); return; }
+    const head = parseLineaCSV(lineas[0]).map(h => h.toLowerCase());
+    const iF = head.findIndex(h => h.startsWith("fecha"));
+    const iN = head.findIndex(h => h.startsWith("nombre") || h.startsWith("empleado"));
+    const iR = head.findIndex(h => h.startsWith("posicion") || h.startsWith("posici") || h.startsWith("rol"));
+    const iT = head.findIndex(h => h.includes("trabajada"));
+    const iP = head.findIndex(h => h.includes("programada"));
+    if(iF < 0 || iN < 0 || iT < 0){
+      msgCSV("No reconozco las columnas. El CSV debe tener al menos: Fecha, Nombre, Horas trabajadas (como el que exporta esta pagina).","err");
+      return;
+    }
+    const nuevos = [];
+    for(let i = 1; i < lineas.length; i++){
+      const c = parseLineaCSV(lineas[i]);
+      const fecha = c[iF] || "";
+      const nombre = (c[iN] || "").trim();
+      const rol = iR >= 0 && ROLES[(c[iR]||"").toLowerCase()] ? c[iR].toLowerCase() : "otro";
+      const trab = parseFloat(c[iT]);
+      const prog = iP >= 0 ? parseFloat(c[iP]) : NaN;
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !nombre || isNaN(trab)) continue;
+      const p = isNaN(prog) ? 8 : prog;
+      nuevos.push({ id: Date.now() + "-" + Math.random().toString(36).slice(2,7),
+        fecha, nombre, rol, trab, prog: p,
+        extra: Math.max(0, trab - p), faltantes: Math.max(0, p - trab) });
+    }
+    if(nuevos.length === 0){ msgCSV("No se encontro ninguna fila valida en el CSV.","err"); return; }
+    const prev = registros.slice();
+    registros = registros.concat(nuevos);
+    const ok = await persistir();
+    if(ok){ msgCSV(nuevos.length + " registros importados.","ok"); render(); }
+    else { registros = prev; }
+  }catch(e){
+    msgCSV("No se pudo leer el archivo CSV.","err");
+  }finally{
+    document.getElementById("csv-input").value = "";
+  }
 }
 
 function exportarCSV(){
