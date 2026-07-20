@@ -50,10 +50,6 @@
   .empty{font-size:14px;color:var(--ink-soft);padding:14px 4px}
   .table-scroll{overflow:auto}
   .row-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
-  .drop{border:2px dashed var(--line);border-radius:12px;padding:24px 18px;text-align:center;cursor:pointer;background:#fff;transition:background .15s,border-color .15s}
-  .drop.over{background:var(--brand-soft);border-color:var(--brand)}
-  @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
-  #pdf-loading{animation:pulse 1.4s ease-in-out infinite}
   @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -68,34 +64,8 @@
 
 <main class="wrap">
 
-  <!-- Análisis de PDF -->
-  <h2>Leer PDF de fichajes</h2>
-  <div class="panel">
-    <div style="margin-bottom:14px">
-      <label for="api-key">Clave de la API de Anthropic (solo para leer PDFs)</label>
-      <input type="password" id="api-key" placeholder="sk-ant-…" autocomplete="off" onchange="guardarClave()">
-      <div style="font-size:12.5px;color:var(--ink-soft);margin-top:5px">
-        Se guarda únicamente en este navegador. Consíguela en console.anthropic.com. Sin clave, puedes seguir usando el registro manual.
-      </div>
-    </div>
-    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Subir PDF de fichajes"
-         onclick="document.getElementById('pdf-input').click()">
-      <input type="file" id="pdf-input" accept="application/pdf" style="display:none" onchange="pdfElegido(this.files[0])">
-      <div id="drop-text">
-        <div style="font-weight:600;font-size:15px">Arrastra aquí el PDF del timesheet</div>
-        <div style="font-size:13px;color:var(--ink-soft);margin-top:4px">o haz clic para elegirlo</div>
-      </div>
-    </div>
-    <div class="row-actions">
-      <button class="btn" id="btn-analizar" onclick="analizarPDF()" disabled>Analizar PDF</button>
-      <span id="pdf-loading" style="display:none;font-size:13.5px;color:var(--ink-soft)">Leyendo el PDF y detectando horas extra…</span>
-    </div>
-    <div class="msg" id="pdf-msg"></div>
-    <div id="pdf-preview" style="margin-top:14px"></div>
-  </div>
-
   <!-- Formulario -->
-  <h2>Añadir registro a mano</h2>
+  <h2>Añadir registro</h2>
   <div class="panel">
     <div class="grid form-grid">
       <div><label for="f-fecha">Fecha</label><input type="date" id="f-fecha"></div>
@@ -181,7 +151,7 @@ async function persistir(){
     localStorage.setItem(KEY, JSON.stringify(registros));
     return true;
   }catch(e){
-    mostrarMsg("No se pudo guardar en este navegador (¿modo incógnito o sin espacio?).","err");
+    mostrarMsg("No se pudo guardar en este navegador (\u00bfmodo inc\u00f3gnito o sin espacio?).","err");
     return false;
   }
 }
@@ -352,175 +322,6 @@ function exportarCSV(){
   a.download = "registro-horas.csv";
   a.click();
   URL.revokeObjectURL(a.href);
-}
-
-// ─── Lectura de PDF ─────────────────────────────────────────────────────
-let pdfFile = null;
-let pdfResultados = [];
-
-const KEY_API = "clave-api-anthropic";
-function guardarClave(){
-  try{ localStorage.setItem(KEY_API, document.getElementById("api-key").value.trim()); }catch(e){}
-}
-try{
-  const k = localStorage.getItem(KEY_API);
-  if(k) document.getElementById("api-key").value = k;
-}catch(e){}
-
-const dropEl = document.getElementById("drop");
-dropEl.addEventListener("dragover", e => { e.preventDefault(); dropEl.classList.add("over"); });
-dropEl.addEventListener("dragleave", () => dropEl.classList.remove("over"));
-dropEl.addEventListener("drop", e => { e.preventDefault(); dropEl.classList.remove("over"); pdfElegido(e.dataTransfer.files[0]); });
-dropEl.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" ") document.getElementById("pdf-input").click(); });
-
-function msgPDF(t, tipo){
-  const m = document.getElementById("pdf-msg");
-  m.textContent = t; m.className = "msg " + tipo;
-  clearTimeout(m._t); m._t = setTimeout(()=>{ m.className = "msg"; }, 6000);
-}
-
-function pdfElegido(f){
-  if(!f) return;
-  if(f.type !== "application/pdf"){ msgPDF("El archivo debe ser un PDF.","err"); return; }
-  pdfFile = f;
-  pdfResultados = [];
-  document.getElementById("pdf-preview").innerHTML = "";
-  document.getElementById("drop-text").innerHTML =
-    `<div style="font-weight:600;font-size:15px">${esc(f.name)}</div>
-     <div style="font-size:13px;color:var(--ink-soft);margin-top:4px">${(f.size/1024).toFixed(0)} KB · haz clic para cambiar</div>`;
-  document.getElementById("btn-analizar").disabled = false;
-}
-
-async function analizarPDF(){
-  if(!pdfFile) return;
-  const apiKey = document.getElementById("api-key").value.trim();
-  if(!apiKey){ msgPDF("Introduce tu clave de la API de Anthropic para poder leer PDFs.","err"); return; }
-  const btn = document.getElementById("btn-analizar");
-  btn.disabled = true;
-  document.getElementById("pdf-loading").style.display = "inline";
-  document.getElementById("pdf-preview").innerHTML = "";
-  try{
-    const base64 = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result.split(",")[1]);
-      r.onerror = () => rej(new Error("No se pudo leer el archivo"));
-      r.readAsDataURL(pdfFile);
-    });
-
-    const prompt = `Analiza este PDF de timesheet / fichajes / horarios de un restaurante.
-
-Para CADA empleado y CADA fecha o periodo que aparezca, extrae un registro con:
-- fecha: en formato AAAA-MM-DD. Si el documento solo da un periodo (semana, quincena), usa el primer día del periodo. Si no hay ninguna fecha, usa null.
-- nombre
-- rol: exactamente uno de "server", "kitchen", "supervisor", "bartender", "host", "otro". (Cocineros, line cooks, prep, dishwasher = kitchen. Managers, shift leads = supervisor. Meseros, camareros = server.)
-- horasTrabajadas: horas reales trabajadas (número)
-- horasProgramadas: horas programadas o umbral de referencia. Si el documento no lo indica, usa 8 por día o 40 por semana según la granularidad de los datos.
-
-Si el documento agrupa por semana en vez de por día, devuelve un registro por empleado y semana.
-
-Responde ÚNICAMENTE con JSON válido, sin markdown ni \`\`\`, con esta forma exacta:
-{"registros":[{"fecha":"2026-07-13","nombre":"...","rol":"server","horasTrabajadas":0,"horasProgramadas":0}],"notas":"observaciones breves o null"}`;
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-          { type: "text", text: prompt }
-        ]}]
-      })
-    });
-
-    const raw = await response.json();
-    if(raw.error) throw new Error(raw.error.message || "Error de la API");
-    const text = (raw.content || []).map(b => b.text || "").join("\n");
-    const clean = text.replace(/```json|```/g, "").trim();
-    const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
-    if(s === -1 || e === -1) throw new Error("No se pudo interpretar el PDF. Prueba con un documento más claro o más corto.");
-    const parsed = JSON.parse(clean.slice(s, e + 1));
-    if(!Array.isArray(parsed.registros) || parsed.registros.length === 0)
-      throw new Error("No se encontraron empleados con horas en el PDF.");
-
-    const hoy = new Date().toISOString().slice(0,10);
-    pdfResultados = parsed.registros.map(r => {
-      const trab = Number(r.horasTrabajadas) || 0;
-      const prog = Number(r.horasProgramadas) || 0;
-      return {
-        fecha: (r.fecha && /^\d{4}-\d{2}-\d{2}$/.test(r.fecha)) ? r.fecha : hoy,
-        nombre: String(r.nombre || "Sin nombre").trim(),
-        rol: ROLES[r.rol] ? r.rol : "otro",
-        trab, prog,
-        extra: Math.max(0, trab - prog),
-        faltantes: Math.max(0, prog - trab),
-      };
-    });
-    mostrarPreviewPDF(parsed.notas);
-  }catch(err){
-    console.error(err);
-    msgPDF(err.message || "Ocurrió un error al analizar el PDF.","err");
-  }finally{
-    document.getElementById("pdf-loading").style.display = "none";
-    btn.disabled = false;
-  }
-}
-
-function mostrarPreviewPDF(notas){
-  const totEx = pdfResultados.reduce((s,r)=>s+r.extra,0);
-  const totFa = pdfResultados.reduce((s,r)=>s+r.faltantes,0);
-  const conEx = pdfResultados.filter(r=>r.extra>0).length;
-  document.getElementById("pdf-preview").innerHTML = `
-    <div style="font-size:14px;margin-bottom:10px">
-      Se encontraron <strong>${pdfResultados.length}</strong> registros ·
-      <span class="num-ot">${fmt(totEx)} extra</span> (${conEx} con horas extra) ·
-      <span class="num-def">${fmt(totFa)} por salidas antes</span>
-    </div>
-    <div class="table-scroll">
-    <table><thead><tr><th>Fecha</th><th>Nombre</th><th>Posición</th><th>Trabajadas</th><th>Programadas</th><th>Extra</th><th>Salió antes</th></tr></thead><tbody>` +
-    pdfResultados.map(r => `<tr>
-      <td>${r.fecha}</td><td style="font-weight:600">${esc(r.nombre)}</td><td>${chip(r.rol)}</td>
-      <td>${fmt(r.trab)}</td><td>${fmt(r.prog)}</td>
-      <td class="${r.extra>0?"num-ot":"muted"}">${fmt(r.extra)}</td>
-      <td class="${r.faltantes>0?"num-def":"muted"}">${fmt(r.faltantes)}</td></tr>`).join("") +
-    `</tbody></table></div>
-    ${notas ? `<div style="font-size:13px;color:var(--ink-soft);margin-top:10px"><strong>Notas:</strong> ${esc(notas)}</div>` : ""}
-    <div class="row-actions">
-      <button class="btn" onclick="guardarPDF()">Guardar estos registros</button>
-      <button class="btn secondary" onclick="descartarPDF()">Descartar</button>
-    </div>`;
-}
-
-async function guardarPDF(){
-  if(pdfResultados.length === 0) return;
-  const nuevos = pdfResultados.map(r => ({
-    id: Date.now() + "-" + Math.random().toString(36).slice(2,7), ...r
-  }));
-  const prev = registros.slice();
-  registros = registros.concat(nuevos);
-  const ok = await persistir();
-  if(ok){
-    msgPDF(nuevos.length + " registros guardados en el histórico.","ok");
-    descartarPDF();
-    render();
-  } else { registros = prev; }
-}
-
-function descartarPDF(){
-  pdfResultados = [];
-  pdfFile = null;
-  document.getElementById("pdf-preview").innerHTML = "";
-  document.getElementById("pdf-input").value = "";
-  document.getElementById("btn-analizar").disabled = true;
-  document.getElementById("drop-text").innerHTML =
-    `<div style="font-weight:600;font-size:15px">Arrastra aquí el PDF del timesheet</div>
-     <div style="font-size:13px;color:var(--ink-soft);margin-top:4px">o haz clic para elegirlo</div>`;
 }
 
 // Fecha de hoy por defecto
