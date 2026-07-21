@@ -237,15 +237,25 @@ function horaCorta(txt){
 
 function extraerInfoEvento(lineas){
   const info = {};
-  for(const l of lineas){
+  for(let i = 0; i < lineas.length; i++){
+    const l = lineas[i];
     let m = l.match(/Event:\s*(?:[A-Za-zÁ-ú]+\s+)?(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})/i);
-    if(m && !info.fecha) info.fecha = `${m[3]}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;
+    if(m && !info.fecha) info.fecha = `${m[1].padStart(2,"0")}/${m[2].padStart(2,"0")}/${m[3]}`;
     m = l.match(/Event\s*#:\s*(.+)/i);
     if(m && !info.numero) info.numero = m[1].replace(/Page:.*/i,"").trim();
     m = l.match(/([\d\/]+)\s+Guests/i);
     if(m && !info.invitados) info.invitados = m[1];
     m = l.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*[-–]\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
     if(m && !info.horario && /guest|phpd|event/i.test(l)) info.horario = m[1] + " – " + m[2];
+    // Dirección: línea que termina en estado + código postal (ej. "..., VA 20166")
+    if(!info.direccion && /,\s*[A-Z]{2}\s+\d{5}(-\d{4})?\s*$/.test(l)){
+      let dir = l.trim();
+      // Si la línea no incluye el número de calle, viene partida: unir con la anterior
+      if(!/\d+\s+\w+/.test(dir.split(",")[0]) && i > 0 && /\d/.test(lineas[i-1])){
+        dir = lineas[i-1].trim() + " " + dir;
+      }
+      info.direccion = dir;
+    }
   }
   return info;
 }
@@ -306,12 +316,11 @@ async function analizar(file){
       mensaje(registros.length + " workers read successfully.", "ok");
     }
     const ev = [];
-    if(infoEvento.fecha) ev.push("Event: " + infoEvento.fecha);
-    if(infoEvento.numero) ev.push("#" + infoEvento.numero);
-    if(infoEvento.invitados) ev.push(infoEvento.invitados + " guests");
-    if(infoEvento.horario) ev.push(infoEvento.horario);
+    if(infoEvento.numero) ev.push("ID " + infoEvento.numero);
+    if(infoEvento.fecha) ev.push(infoEvento.fecha);
+    if(infoEvento.direccion) ev.push(infoEvento.direccion);
     document.getElementById("nombre-archivo").textContent =
-      nombreArchivo + " · " + paginasTexto.length + " page(s)" + (ev.length ? " · " + ev.join(" · ") : "");
+      nombreArchivo + (ev.length ? " · " + ev.join(" · ") : "");
     document.getElementById("resultados").style.display = "block";
     pintar();
     document.getElementById("resultados").scrollIntoView({behavior:"smooth", block:"start"});
@@ -478,18 +487,12 @@ function descargarReporte(){
   let y = 50;
 
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(28,36,34);
-  doc.text("Event Hours Report", mx, y); y += 20;
-  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(90,100,96);
-  doc.text(`File: ${nombreArchivo}`, mx, y); y += 14;
-  const evLinea = [
-    infoEvento.fecha ? "Event date: " + infoEvento.fecha : null,
-    infoEvento.numero ? "Event #: " + infoEvento.numero : null,
-    infoEvento.invitados ? infoEvento.invitados + " guests" : null
-  ].filter(Boolean).join("   ·   ");
-  if(evLinea){ doc.text(evLinea, mx, y); y += 14; }
-  doc.text(`Generated: ${new Date().toLocaleString("en-US")}`, mx, y); y += 14;
-  if(t > 0){ doc.text(`Hourly rate: ${fmtDinero(t)}`, mx, y); y += 14; }
-  y += 8;
+  doc.text("Event Hours Report", mx, y); y += 22;
+  doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(60,70,66);
+  if(infoEvento.numero){ doc.text(`Event ID: ${infoEvento.numero}`, mx, y); y += 15; }
+  if(infoEvento.fecha){ doc.text(`Event date: ${infoEvento.fecha}`, mx, y); y += 15; }
+  if(infoEvento.direccion){ doc.text(`Address: ${infoEvento.direccion}`, mx, y); y += 15; }
+  y += 10;
 
   const cardW = (595 - mx*2 - 30) / 4;
   const tarjetas = [
