@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Analizador de horas del evento</title>
+<title>Event Hours Analyzer</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -77,19 +77,19 @@
 <div class="wrap">
 
   <header>
-    <h1>Analizador de horas del evento</h1>
-    <p>Sube el PDF con las horas del personal y obtén al instante las horas extra, las salidas antes de tiempo y el total a pagar.</p>
+    <h1>Event Hours Analyzer</h1>
+    <p>Upload the staff hours PDF and instantly get overtime, early departures, and the total to pay.</p>
   </header>
 
-  <div class="zona" id="zona" role="button" tabindex="0" aria-label="Subir PDF"
+  <div class="zona" id="zona" role="button" tabindex="0" aria-label="Upload PDF"
        onclick="document.getElementById('archivo').click()"
        onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('archivo').click()"
        ondragover="event.preventDefault();this.classList.add('arrastrando')"
        ondragleave="this.classList.remove('arrastrando')"
        ondrop="event.preventDefault();this.classList.remove('arrastrando');if(event.dataTransfer.files[0])analizar(event.dataTransfer.files[0])">
     <div class="icono">📄</div>
-    <div class="titulo" id="zona-titulo">Arrastra el PDF aquí o haz clic para elegirlo</div>
-    <div class="sub">La página lee cada línea con fecha, nombre y horas. Detecta la posición (Server, Kitchen, Pantry…) automáticamente.</div>
+    <div class="titulo" id="zona-titulo">Drag the PDF here or click to choose it</div>
+    <div class="sub">The page reads each worker line with scheduled and actual times, and detects the position (Server, Kitchen, Pantry…) automatically.</div>
     <input type="file" id="archivo" accept=".pdf,application/pdf" style="display:none"
            onchange="analizar(this.files[0]);this.value=''">
   </div>
@@ -98,45 +98,45 @@
   <div id="resultados">
     <div class="barra">
       <div>
-        <h2>Resultados del evento</h2>
+        <h2>Event results</h2>
         <div class="archivo" id="nombre-archivo"></div>
       </div>
       <div class="acciones">
         <div>
-          <label for="orden">Orden de horas en el PDF</label>
+          <label for="orden">Time column order in the PDF</label>
           <select id="orden" onchange="reinterpretar()">
-            <option value="prog-primero">Programadas primero (Call → Actual)</option>
-            <option value="real-primero">Reales primero (Actual → Call)</option>
+            <option value="prog-primero">Scheduled first (Call → Actual)</option>
+            <option value="real-primero">Actual first (Actual → Call)</option>
           </select>
         </div>
         <div>
-          <label for="tarifa">Tarifa por hora ($)</label>
-          <input type="number" id="tarifa" min="0" step="0.5" placeholder="Ej. 12.50" oninput="pintar()">
+          <label for="tarifa">Hourly rate ($)</label>
+          <input type="number" id="tarifa" min="0" step="0.5" placeholder="e.g. 12.50" oninput="pintar()">
         </div>
-        <button class="btn" onclick="descargarReporte()">⬇ Descargar reporte PDF</button>
-        <button class="btn suave" onclick="reiniciar()">Analizar otro PDF</button>
+        <button class="btn" onclick="descargarReporte()">⬇ Download PDF report</button>
+        <button class="btn suave" onclick="reiniciar()">Analyze another PDF</button>
       </div>
     </div>
 
     <div class="tarjetas" id="tarjetas"></div>
 
     <section>
-      <h3>Por posición</h3>
+      <h3>By position</h3>
       <div class="tabla" id="tabla-posiciones"></div>
     </section>
 
     <section>
-      <h3>Por persona</h3>
+      <h3>By person</h3>
       <div class="tabla" id="tabla-personas"></div>
     </section>
 
     <details id="detalle-registros">
-      <summary>Ver comparación de horarios persona por persona (programado vs real)</summary>
+      <summary>View schedule comparison per person (scheduled vs actual)</summary>
       <div class="tabla" id="tabla-registros" style="margin-top:8px"></div>
     </details>
 
     <details id="detalle-texto">
-      <summary>Ver todo el texto leído del PDF</summary>
+      <summary>View all text read from the PDF</summary>
       <div id="texto-completo"></div>
     </details>
   </div>
@@ -174,8 +174,8 @@ let nombreArchivo = "";
 let infoEvento = {};      // {fecha, numero, nombre, invitados, horario}
 
 /* ---------- Utilidades ---------- */
-const fmt = n => (Math.round(n*100)/100).toLocaleString("es-ES", {maximumFractionDigits:2}) + " h";
-const fmtDinero = n => "$" + (Math.round(n*100)/100).toLocaleString("es-ES", {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmt = n => (Math.round(n*100)/100).toLocaleString("en-US", {maximumFractionDigits:2}) + " h";
+const fmtDinero = n => "$" + (Math.round(n*100)/100).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
 const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const tarifa = () => parseFloat(document.getElementById("tarifa").value) || 0;
 
@@ -291,34 +291,34 @@ function reinterpretar(){
 async function analizar(file){
   if(!file) return;
   if(!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){
-    mensaje("El archivo debe ser un PDF.", "err"); return;
+    mensaje("The file must be a PDF.", "err"); return;
   }
   const titulo = document.getElementById("zona-titulo");
-  titulo.innerHTML = '<span class="spinner"></span>Leyendo el PDF…';
+  titulo.innerHTML = '<span class="spinner"></span>Reading the PDF…';
   mensaje("");
   try{
     paginasTexto = await leerPDF(file);
     registros = interpretar(paginasTexto.flatMap(p => p.lineas));
     nombreArchivo = file.name;
     if(registros.length === 0){
-      mensaje("No se reconocieron trabajadores con sus 4 horas (Call In/Out y Actual In/Out). Abre \"Ver todo el texto leído\" abajo para revisar cómo vino el contenido.", "err");
+      mensaje("No workers with their 4 times (Call In/Out and Actual In/Out) were recognized. Open \"View all text read from the PDF\" below to check how the content came through.", "err");
     } else {
-      mensaje(registros.length + " trabajadores leídos correctamente.", "ok");
+      mensaje(registros.length + " workers read successfully.", "ok");
     }
     const ev = [];
-    if(infoEvento.fecha) ev.push("Evento: " + infoEvento.fecha);
+    if(infoEvento.fecha) ev.push("Event: " + infoEvento.fecha);
     if(infoEvento.numero) ev.push("#" + infoEvento.numero);
-    if(infoEvento.invitados) ev.push(infoEvento.invitados + " invitados");
+    if(infoEvento.invitados) ev.push(infoEvento.invitados + " guests");
     if(infoEvento.horario) ev.push(infoEvento.horario);
     document.getElementById("nombre-archivo").textContent =
-      nombreArchivo + " · " + paginasTexto.length + " página(s)" + (ev.length ? " · " + ev.join(" · ") : "");
+      nombreArchivo + " · " + paginasTexto.length + " page(s)" + (ev.length ? " · " + ev.join(" · ") : "");
     document.getElementById("resultados").style.display = "block";
     pintar();
     document.getElementById("resultados").scrollIntoView({behavior:"smooth", block:"start"});
   }catch(e){
-    mensaje("No se pudo leer el PDF: " + e.message, "err");
+    mensaje("Could not read the PDF: " + e.message, "err");
   }finally{
-    titulo.textContent = "Arrastra el PDF aquí o haz clic para elegirlo";
+    titulo.textContent = "Drag the PDF here or click to choose it";
   }
 }
 
@@ -365,30 +365,30 @@ function pintar(){
 
   document.getElementById("tarjetas").innerHTML = `
     <div class="tarjeta t-ambar">
-      <div class="etq">Con horas extra</div>
+      <div class="etq">With overtime</div>
       <div class="num">${R.conExtra}</div>
-      <div class="det">${R.conExtra===1?"persona":"personas"} · ${fmt(R.totEx)} en total</div>
+      <div class="det">${R.conExtra===1?"person":"people"} · ${fmt(R.totEx)} total</div>
     </div>
     <div class="tarjeta t-rojo">
-      <div class="etq">Se fueron antes</div>
+      <div class="etq">Left early</div>
       <div class="num">${R.seFueronAntes}</div>
-      <div class="det">${R.seFueronAntes===1?"persona":"personas"} · ${fmt(R.totAn)} en total</div>
+      <div class="det">${R.seFueronAntes===1?"person":"people"} · ${fmt(R.totAn)} total</div>
     </div>
     <div class="tarjeta t-verde">
-      <div class="etq">Horas por pagar</div>
+      <div class="etq">Hours to pay</div>
       <div class="num">${fmt(R.horasPagar)}</div>
-      <div class="det">Extras menos salidas antes, por persona</div>
+      <div class="det">Overtime minus early departures, per person</div>
     </div>
     <div class="tarjeta t-verde">
-      <div class="etq">Total a pagar</div>
+      <div class="etq">Total to pay</div>
       <div class="num">${t>0 ? fmtDinero(R.horasPagar*t) : "—"}</div>
-      <div class="det">${t>0 ? "a " + fmtDinero(t) + " la hora" : "Escribe la tarifa arriba"}</div>
+      <div class="det">${t>0 ? "at " + fmtDinero(t) + " per hour" : "Enter the hourly rate above"}</div>
     </div>`;
 
   const roles = Object.keys(R.porRol);
   document.getElementById("tabla-posiciones").innerHTML = `
     <table><thead><tr>
-      <th>Posición</th><th>Personas</th><th>Con extra</th><th>Se fueron antes</th><th>Horas extra</th><th>Horas antes</th>
+      <th>Position</th><th>People</th><th>With overtime</th><th>Left early</th><th>Overtime hours</th><th>Hours left early</th>
     </tr></thead><tbody>
     ${roles.map(rol => {
       const v = R.porRol[rol];
@@ -410,7 +410,7 @@ function pintar(){
 
   document.getElementById("tabla-personas").innerHTML = `
     <table><thead><tr>
-      <th>Nombre</th><th>Posición</th><th>Días</th><th>Trabajadas</th><th>Extra</th><th>Se fue antes</th><th>Horas a pagar</th><th>A pagar ($)</th>
+      <th>Name</th><th>Position</th><th>Days</th><th>Worked</th><th>Overtime</th><th>Left early</th><th>Hours to pay</th><th>To pay ($)</th>
     </tr></thead><tbody>
     ${R.personas.map(p => {
       const hp = Math.max(0, p.ex - p.an);
@@ -436,7 +436,7 @@ function pintar(){
   const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
   document.getElementById("tabla-registros").innerHTML = `
     <table><thead><tr>
-      <th>Nombre</th><th>Posición</th><th>Horario programado</th><th>Horario real</th><th>Prog.</th><th>Real</th><th>Extra</th><th>Se fue antes</th>
+      <th>Name</th><th>Position</th><th>Scheduled shift</th><th>Actual shift</th><th>Sched.</th><th>Actual</th><th>Overtime</th><th>Left early</th>
     </tr></thead><tbody>
     ${orden.map(r => `<tr>
       <td style="font-weight:600">${esc(r.nombre)}</td>
@@ -454,8 +454,8 @@ function pintar(){
 
 function pintarTexto(){
   document.getElementById("texto-completo").innerHTML = paginasTexto.map(pg => `
-    <div style="font-weight:600;font-size:13.5px;margin-top:10px">Página ${pg.numero} · ${pg.lineas.length} líneas</div>
-    <div class="texto-pdf">${pg.lineas.map(esc).join("\n") || "(sin texto extraíble — puede ser una imagen escaneada)"}</div>
+    <div style="font-weight:600;font-size:13.5px;margin-top:10px">Page ${pg.numero} · ${pg.lineas.length} lines</div>
+    <div class="texto-pdf">${pg.lineas.map(esc).join("\n") || "(no extractable text — this may be a scanned image)"}</div>
   `).join("");
 }
 
@@ -468,7 +468,7 @@ function reiniciar(){
 
 /* ---------- Reporte PDF ---------- */
 function descargarReporte(){
-  if(registros.length === 0){ mensaje("No hay datos que exportar.", "err"); return; }
+  if(registros.length === 0){ mensaje("No data to export.", "err"); return; }
   const R = resumen();
   const t = tarifa();
 
@@ -478,25 +478,25 @@ function descargarReporte(){
   let y = 50;
 
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(28,36,34);
-  doc.text("Reporte de horas del evento", mx, y); y += 20;
+  doc.text("Event Hours Report", mx, y); y += 20;
   doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(90,100,96);
-  doc.text(`Archivo: ${nombreArchivo}`, mx, y); y += 14;
+  doc.text(`File: ${nombreArchivo}`, mx, y); y += 14;
   const evLinea = [
-    infoEvento.fecha ? "Fecha del evento: " + infoEvento.fecha : null,
-    infoEvento.numero ? "Evento #: " + infoEvento.numero : null,
-    infoEvento.invitados ? infoEvento.invitados + " invitados" : null
+    infoEvento.fecha ? "Event date: " + infoEvento.fecha : null,
+    infoEvento.numero ? "Event #: " + infoEvento.numero : null,
+    infoEvento.invitados ? infoEvento.invitados + " guests" : null
   ].filter(Boolean).join("   ·   ");
   if(evLinea){ doc.text(evLinea, mx, y); y += 14; }
-  doc.text(`Generado: ${new Date().toLocaleString("es-ES")}`, mx, y); y += 14;
-  if(t > 0){ doc.text(`Tarifa por hora: ${fmtDinero(t)}`, mx, y); y += 14; }
+  doc.text(`Generated: ${new Date().toLocaleString("en-US")}`, mx, y); y += 14;
+  if(t > 0){ doc.text(`Hourly rate: ${fmtDinero(t)}`, mx, y); y += 14; }
   y += 8;
 
   const cardW = (595 - mx*2 - 30) / 4;
   const tarjetas = [
-    {etq:"CON HORAS EXTRA", val:`${R.conExtra} pers.`, sub:fmt(R.totEx), color:[185,116,22]},
-    {etq:"SE FUERON ANTES", val:`${R.seFueronAntes} pers.`, sub:fmt(R.totAn), color:[178,59,42]},
-    {etq:"HORAS POR PAGAR", val:fmt(R.horasPagar), sub:"neto por persona", color:[22,96,73]},
-    {etq:"TOTAL A PAGAR", val:t>0?fmtDinero(R.horasPagar*t):"—", sub:t>0?`a ${fmtDinero(t)}/h`:"sin tarifa", color:[22,96,73]}
+    {etq:"WITH OVERTIME", val:`${R.conExtra} ppl.`, sub:fmt(R.totEx), color:[185,116,22]},
+    {etq:"LEFT EARLY", val:`${R.seFueronAntes} ppl.`, sub:fmt(R.totAn), color:[178,59,42]},
+    {etq:"HOURS TO PAY", val:fmt(R.horasPagar), sub:"net per person", color:[22,96,73]},
+    {etq:"TOTAL TO PAY", val:t>0?fmtDinero(R.horasPagar*t):"—", sub:t>0?`at ${fmtDinero(t)}/h`:"no rate set", color:[22,96,73]}
   ];
   tarjetas.forEach((c,i)=>{
     const x = mx + i*(cardW+10);
@@ -513,7 +513,7 @@ function descargarReporte(){
 
   // Por posición
   doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
-  doc.text("Por posición", mx, y);
+  doc.text("By position", mx, y);
   const filasRol = Object.keys(R.porRol).map(rol=>{
     const v = R.porRol[rol];
     return [labelPos(rol), v.personas, v.conExtra, v.seFueAntes, fmt(v.ex), fmt(v.an)];
@@ -528,7 +528,7 @@ function descargarReporte(){
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Posición","Personas","Con extra","Se fueron antes","Horas extra","Horas antes"]],
+    head:[["Position","People","With overtime","Left early","Overtime hours","Hours left early"]],
     body:filasRol,
     styles:{fontSize:9, cellPadding:6}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
   });
@@ -537,7 +537,7 @@ function descargarReporte(){
   // Por persona
   if(y > 650){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setFont("helvetica","bold");
-  doc.text("Por persona", mx, y);
+  doc.text("By person", mx, y);
   const filasPers = R.personas.map(p=>{
     const hp = Math.max(0, p.ex - p.an);
     return [p.nombre, labelPos(p.rol), p.dias, fmt(p.trab),
@@ -552,7 +552,7 @@ function descargarReporte(){
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Nombre","Posición","Días","Trabajadas","Extra","Se fue antes","Horas a pagar","A pagar ($)"]],
+    head:[["Name","Position","Days","Worked","Overtime","Left early","Hours to pay","To pay ($)"]],
     body:filasPers,
     styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
   });
@@ -565,8 +565,8 @@ function descargarReporte(){
   doc.setFontSize(11); doc.setTextColor(22,96,73); doc.setFont("helvetica","bold");
   doc.text(
     t > 0
-      ? `TOTAL A PAGAR: ${fmtDinero(R.horasPagar*t)}   (${fmt(R.horasPagar)} a ${fmtDinero(t)} por hora)`
-      : `TOTAL DE HORAS POR PAGAR: ${fmt(R.horasPagar)}`,
+      ? `TOTAL TO PAY: ${fmtDinero(R.horasPagar*t)}   (${fmt(R.horasPagar)} at ${fmtDinero(t)} per hour)`
+      : `TOTAL HOURS TO PAY: ${fmt(R.horasPagar)}`,
     mx + 14, y + 26);
   doc.setFont("helvetica","normal");
   y += 42 + 22;
@@ -575,17 +575,17 @@ function descargarReporte(){
   const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
   if(y > 650){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
-  doc.text("Comparación de horarios (programado vs real)", mx, y);
+  doc.text("Schedule comparison (scheduled vs actual)", mx, y);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Nombre","Posición","Prog. In","Prog. Out","Real In","Real Out","Prog.","Real","Extra","Antes"]],
+    head:[["Name","Position","Sched. In","Sched. Out","Actual In","Actual Out","Sched.","Actual","Overtime","Early"]],
     body:orden.map(r=>[r.nombre, labelPos(r.rol), r.progIn, r.progOut, r.realIn, r.realOut,
       fmt(r.prog), fmt(r.trab),
       r.extra>0?fmt(r.extra):"—", r.antes>0?fmt(r.antes):"—"]),
     styles:{fontSize:7.5, cellPadding:4}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
   });
 
-  doc.save(`reporte-evento-${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`event-report-${new Date().toISOString().slice(0,10)}.pdf`);
 }
 </script>
 </body>
