@@ -413,6 +413,8 @@ function exportarCSV(){
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 let filasDetectadasPDF = [];
+let pdfPaginasActuales = [];
+let pdfArchivoActual = "";
 
 function nombreRolPorTexto(txt){
   const t = (txt||"").toLowerCase();
@@ -439,12 +441,15 @@ async function extraerLineasPDF(file){
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({data: buf}).promise;
   let lineas = [];
+  const paginas = [];
   for(let p = 1; p <= pdf.numPages; p++){
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    lineas = lineas.concat(lineasDesdeContenido(content.items));
+    const lineasPagina = lineasDesdeContenido(content.items);
+    paginas.push({numero: p, lineas: lineasPagina});
+    lineas = lineas.concat(lineasPagina);
   }
-  return lineas;
+  return {lineas, paginas, numPaginas: pdf.numPages};
 }
 
 function normalizarFecha(txt){
@@ -506,13 +511,14 @@ async function importarPDF(file){
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Leyendo PDF…';
   try{
-    const lineas = await extraerLineasPDF(file);
+    const { lineas, paginas } = await extraerLineasPDF(file);
     const detectadas = parsearLineasAregistros(lineas);
-    if(detectadas.length === 0){
-      msgCSV("No se detectaron registros de horas en el PDF. Revisa que tenga fecha, nombre y horas por linea.", "err");
-      return;
-    }
     filasDetectadasPDF = detectadas;
+    pdfPaginasActuales = paginas;
+    pdfArchivoActual = file.name;
+    if(detectadas.length === 0){
+      msgCSV("No se detectaron registros de horas con fecha reconocible, pero abajo puedes ver todo el contenido leído del PDF.", "err");
+    }
     mostrarPreviewPDF();
   }catch(e){
     msgCSV("No se pudo leer el PDF: " + e.message, "err");
@@ -526,14 +532,13 @@ async function importarPDF(file){
 function mostrarPreviewPDF(){
   const cont = document.getElementById("pdf-preview");
   const opcionesRol = Object.keys(ROLES).map(k => `<option value="${k}">${ROLES[k].label}</option>`).join("");
-  cont.innerHTML = `
-    <div class="preview-head">
-      <div><strong>Vista previa</strong> — revisa y corrige antes de importar</div>
-      <div class="cnt">${filasDetectadasPDF.length} registro(s) detectado(s) en el PDF</div>
-    </div>
-    <div class="table-scroll">
+  const totExDetectado = filasDetectadasPDF.reduce((s,r)=>s+r.extra,0);
+
+  const tablaDetectados = filasDetectadasPDF.length === 0
+    ? `<div class="empty">No se reconocieron filas con fecha + nombre + horas. Revisa el contenido completo abajo para ver cómo vino el texto del PDF.</div>`
+    : `<div class="table-scroll">
       <table><thead><tr>
-        <th></th><th>Fecha</th><th>Nombre</th><th>Posición</th><th>Trabajadas</th><th>Programadas</th>
+        <th></th><th>Fecha</th><th>Nombre</th><th>Posición</th><th>Trabajadas</th><th>Programadas</th><th>Extra</th>
       </tr></thead><tbody>
       ${filasDetectadasPDF.map((r,i)=>`<tr class="preview-row-editable">
         <td><input type="checkbox" class="chk" data-i="${i}" checked></td>
@@ -542,6 +547,7 @@ function mostrarPreviewPDF(){
         <td><select onchange="filasDetectadasPDF[${i}].rol=this.value">${opcionesRol.replace(`value="${r.rol}"`, `value="${r.rol}" selected`)}</select></td>
         <td><input type="number" step="0.25" value="${r.trab}" onchange="filasDetectadasPDF[${i}].trab=parseFloat(this.value)||0"></td>
         <td><input type="number" step="0.25" value="${r.prog}" onchange="filasDetectadasPDF[${i}].prog=parseFloat(this.value)||0"></td>
+        <td class="${r.extra>0?'num-ot':'muted'}">${fmt(r.extra)}</td>
       </tr>`).join("")}
       </tbody></table>
     </div>
@@ -549,11 +555,36 @@ function mostrarPreviewPDF(){
       <button class="btn" onclick="confirmarImportPDF()">Importar seleccionados</button>
       <button class="btn secondary" onclick="cancelarPreviewPDF()">Cancelar</button>
     </div>`;
+
+  const detalleCompleto = pdfPaginasActuales.map(pg => `
+    <details ${pdfPaginasActuales.length<=1?"open":""} style="margin-bottom:8px">
+      <summary style="cursor:pointer;font-weight:600;font-size:13.5px;padding:6px 0">Página ${pg.numero} (${pg.lineas.length} líneas)</summary>
+      <div style="background:#F7F9F8;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:12.5px;line-height:1.6;white-space:pre-wrap;max-height:320px;overflow:auto">${
+        pg.lineas.map(l => esc(l)).join("\n") || "(sin texto extraíble en esta página — puede ser una imagen escaneada)"
+      }</div>
+    </details>`).join("");
+
+  cont.innerHTML = `
+    <div class="preview-head">
+      <div><strong>Horas extra detectadas</strong> — revisa y corrige antes de importar</div>
+      <div class="cnt">${filasDetectadasPDF.length} fila(s) · ${fmt(totExDetectado)} de extra en total</div>
+    </div>
+    ${tablaDetectados}
+
+    <div class="preview-head" style="margin-top:22px">
+      <div><strong>Detalle completo del PDF</strong> — todo el texto leído de "${esc(pdfArchivoActual)}"</div>
+      <div class="cnt">${pdfPaginasActuales.length} página(s)</div>
+    </div>
+    ${detalleCompleto}
+    ${filasDetectadasPDF.length === 0 ? `<div class="row-actions"><button class="btn secondary" onclick="cancelarPreviewPDF()">Cerrar</button></div>` : ""}
+  `;
   cont.style.display = "block";
 }
 
 function cancelarPreviewPDF(){
   filasDetectadasPDF = [];
+  pdfPaginasActuales = [];
+  pdfArchivoActual = "";
   document.getElementById("pdf-preview").style.display = "none";
   document.getElementById("pdf-preview").innerHTML = "";
 }
