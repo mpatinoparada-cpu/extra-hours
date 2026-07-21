@@ -3,483 +3,174 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Registro de horas extra</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<title>Analizador de horas del evento</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
-    --bg:#F1F4F2; --panel:#FFFFFF; --ink:#152420; --ink-soft:#5C6B66; --line:#DCE4E0;
-    --brand:#136251; --brand-soft:#E2EFEA;
-    --ot:#B9750F; --ot-soft:#F8EEDA;
-    --def:#B23B2A; --def-soft:#F9E7E3;
-    --ok:#1D7A45; --ok-soft:#E3F2E8;
+    --tinta:#1C2422; --tinta-suave:#5A6460; --papel:#FAFAF7; --panel:#FFFFFF;
+    --linea:#DCE4E0; --verde:#166049; --verde-suave:#E2EFEA;
+    --ambar:#B97416; --ambar-suave:#FBF3E4; --rojo:#B23B2A; --rojo-suave:#FBEAE7;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Barlow',system-ui,sans-serif;padding-bottom:70px}
-  header{background:var(--ink);color:#F4F7F5;padding:26px 22px}
-  .wrap{max-width:960px;margin:0 auto;padding:0 18px}
-  h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:29px;margin:0;line-height:1.1}
-  .sub{margin-top:6px;font-size:14.5px;color:#B9C6C1;max-width:600px}
-  h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:21px;margin:28px 0 12px}
-  .panel{background:var(--panel);border-radius:12px;padding:18px}
-  .grid{display:grid;gap:12px}
-  .form-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end}
-  label{display:block;font-size:12.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:5px}
-  input,select{width:100%;padding:10px 11px;border:1.5px solid var(--line);border-radius:9px;font-family:inherit;font-size:14.5px;background:#fff;color:var(--ink)}
-  input:focus,select:focus,button:focus-visible{outline:3px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
-  .btn{background:var(--brand);color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:inherit}
-  .btn.secondary{background:#fff;color:var(--brand);border:1.5px solid var(--brand);padding:10px 16px}
-  .btn.danger{background:#fff;color:var(--def);border:1.5px solid var(--def);padding:6px 12px;font-size:13px;border-radius:8px}
-  .btn:disabled{background:#9DB5AD;cursor:default}
-  .cards{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-top:14px}
-  .card{border-radius:12px;padding:15px 17px}
-  .card .lbl{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
-  .card .val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:29px;margin-top:3px;font-variant-numeric:tabular-nums}
-  .card .det{font-size:13px;color:var(--ink-soft);margin-top:2px}
-  table{border-collapse:collapse;width:100%}
-  th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;padding:9px 11px;border-bottom:1px solid var(--line);white-space:nowrap}
-  td{padding:9px 11px;border-bottom:1px solid var(--line);font-size:14px;font-variant-numeric:tabular-nums}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Barlow',sans-serif;background:var(--papel);color:var(--tinta);min-height:100vh}
+  .wrap{max-width:960px;margin:0 auto;padding:28px 18px 60px}
+  header h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;color:var(--verde)}
+  header p{color:var(--tinta-suave);font-size:15px;margin-top:4px}
+  .zona{margin-top:22px;border:2px dashed var(--verde);background:var(--verde-suave);border-radius:14px;
+    text-align:center;padding:46px 20px;cursor:pointer;transition:background .15s,border-color .15s}
+  .zona.arrastrando{background:#CDE5DA;border-color:#0C4A3D}
+  .zona .icono{font-size:38px}
+  .zona .titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;color:var(--verde);margin-top:8px}
+  .zona .sub{font-size:14.5px;color:var(--tinta-suave);margin-top:6px;max-width:540px;margin-left:auto;margin-right:auto}
+  .spinner{width:17px;height:17px;border:2.5px solid #CBD8D2;border-top-color:var(--verde);border-radius:50%;
+    display:inline-block;animation:girar .7s linear infinite;vertical-align:-3px;margin-right:8px}
+  @keyframes girar{to{transform:rotate(360deg)}}
+  .msg{margin-top:10px;font-size:14px;min-height:20px}
+  .msg.ok{color:var(--verde)} .msg.err{color:var(--rojo)}
+  #resultados{display:none;margin-top:26px}
+  .barra{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .barra h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:25px;color:var(--tinta)}
+  .barra .archivo{font-size:13.5px;color:var(--tinta-suave)}
+  .acciones{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  label{display:block;font-size:12.5px;font-weight:600;color:var(--tinta-suave);margin-bottom:4px}
+  input[type="number"]{padding:9px 10px;border:1px solid var(--linea);border-radius:9px;font-size:15px;
+    font-family:'Barlow',sans-serif;width:130px;background:var(--panel)}
+  input[type="number"]:focus{outline:2px solid var(--verde);outline-offset:1px;border-color:var(--verde)}
+  .btn{padding:11px 18px;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer;
+    font-family:'Barlow',sans-serif;background:var(--verde);color:#fff;transition:filter .15s}
+  .btn:hover{filter:brightness(1.1)}
+  .btn:focus-visible{outline:2px solid var(--tinta);outline-offset:2px}
+  .btn.suave{background:#EEF1F0;color:var(--tinta)}
+  .tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  .tarjeta{background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:16px 16px 14px}
+  .tarjeta .etq{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+  .tarjeta .num{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;margin-top:4px}
+  .tarjeta .det{font-size:13px;color:var(--tinta-suave);margin-top:3px}
+  .t-ambar{background:var(--ambar-suave)} .t-ambar .etq,.t-ambar .num{color:var(--ambar)}
+  .t-rojo{background:var(--rojo-suave)} .t-rojo .etq,.t-rojo .num{color:var(--rojo)}
+  .t-verde{background:var(--verde-suave)} .t-verde .etq,.t-verde .num{color:var(--verde)}
+  section{margin-top:26px}
+  section h3{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px;margin-bottom:10px}
+  .tabla{background:var(--panel);border:1px solid var(--linea);border-radius:12px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+  th{background:#F1F4F2;text-align:left;padding:10px 12px;font-weight:600;font-size:12.5px;
+    text-transform:uppercase;letter-spacing:.4px;color:var(--tinta-suave);border-bottom:1px solid var(--linea)}
+  td{padding:10px 12px;border-bottom:1px solid var(--linea)}
   tr:last-child td{border-bottom:none}
-  .chip{border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600;white-space:nowrap;display:inline-block}
-  .num-ot{color:var(--ot);font-weight:600}
-  .num-def{color:var(--def);font-weight:600}
-  .muted{color:var(--ink-soft)}
-  .msg{border-radius:10px;padding:11px 15px;font-size:14px;margin-top:12px;display:none}
-  .msg.err{background:var(--def-soft);color:var(--def);display:block}
-  .msg.ok{background:var(--ok-soft);color:var(--ok);display:block}
-  .filters{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));align-items:end;margin-bottom:14px}
-  .empty{font-size:14px;color:var(--ink-soft);padding:14px 4px}
-  .table-scroll{overflow:auto}
-  .row-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
-  .dropzone{border:2px dashed var(--brand);background:var(--brand-soft);text-align:center;padding:34px 20px;cursor:pointer;transition:background .15s,border-color .15s}
-  .dropzone.drag{background:#D2E8DF;border-color:#0C4A3D}
-  .dropzone .dz-icon{font-size:34px;margin-bottom:8px}
-  .dropzone .dz-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:21px;color:var(--brand)}
-  .dropzone .dz-sub{font-size:14px;color:var(--ink-soft);margin-top:5px;max-width:520px;margin-left:auto;margin-right:auto}
-  .preview-wrap{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
-  .preview-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px}
-  .preview-head .cnt{font-size:13.5px;color:var(--ink-soft)}
-  .preview-row-editable input, .preview-row-editable select{padding:6px 7px;font-size:13px;border-radius:7px;min-width:70px}
-  .chk{width:16px;height:16px;accent-color:var(--brand)}
-  .spinner{width:16px;height:16px;border:2.5px solid #DCE4E0;border-top-color:var(--brand);border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:7px}
-  @keyframes spin{to{transform:rotate(360deg)}}
+  .n-ambar{color:var(--ambar);font-weight:600} .n-rojo{color:var(--rojo);font-weight:600}
+  .n-verde{color:var(--verde);font-weight:700} .apagado{color:#9AA5A0}
+  .fila-total td{background:var(--verde-suave);font-weight:700}
+  .chip{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12.5px;font-weight:600;
+    background:#EEF1F0;color:var(--tinta-suave)}
+  details{margin-top:14px}
+  summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--tinta-suave);padding:6px 0}
+  .texto-pdf{background:#F7F9F8;border:1px solid var(--linea);border-radius:9px;padding:10px 12px;
+    font-family:monospace;font-size:12.5px;line-height:1.65;white-space:pre-wrap;max-height:300px;overflow:auto;margin-top:8px}
   @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<header>
-  <div class="wrap">
-    <h1>Registro de horas extra</h1>
-    <div class="sub">Anota las horas de cada persona por posición y fecha. Se guarda automáticamente: verás quién hizo extras, quién salió antes, y cuántas horas quedan pendientes de pagar.</div>
+  <header>
+    <h1>Analizador de horas del evento</h1>
+    <p>Sube el PDF con las horas del personal y obtén al instante las horas extra, las salidas antes de tiempo y el total a pagar.</p>
+  </header>
+
+  <div class="zona" id="zona" role="button" tabindex="0" aria-label="Subir PDF"
+       onclick="document.getElementById('archivo').click()"
+       onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('archivo').click()"
+       ondragover="event.preventDefault();this.classList.add('arrastrando')"
+       ondragleave="this.classList.remove('arrastrando')"
+       ondrop="event.preventDefault();this.classList.remove('arrastrando');if(event.dataTransfer.files[0])analizar(event.dataTransfer.files[0])">
+    <div class="icono">📄</div>
+    <div class="titulo" id="zona-titulo">Arrastra el PDF aquí o haz clic para elegirlo</div>
+    <div class="sub">La página lee cada línea con fecha, nombre y horas. Detecta la posición (Server, Kitchen, Pantry…) automáticamente.</div>
+    <input type="file" id="archivo" accept=".pdf,application/pdf" style="display:none"
+           onchange="analizar(this.files[0]);this.value=''">
   </div>
-</header>
+  <div class="msg" id="mensaje" role="status"></div>
 
-<main class="wrap">
-
-  <!-- Subir PDF -->
-  <h2>Subir PDF con las horas</h2>
-  <div class="panel dropzone" id="dropzone"
-       ondragover="event.preventDefault();this.classList.add('drag')"
-       ondragleave="this.classList.remove('drag')"
-       ondrop="event.preventDefault();this.classList.remove('drag');if(event.dataTransfer.files[0])importarPDF(event.dataTransfer.files[0])"
-       onclick="document.getElementById('pdf-input-top').click()">
-    <div class="dz-icon">📄</div>
-    <div class="dz-title" id="btn-pdf-import">Arrastra tu PDF aquí o haz clic para elegirlo</div>
-    <div class="dz-sub">Se leerán las horas trabajadas de cada persona para calcular extras, salidas antes y el total a pagar</div>
-    <input type="file" id="pdf-input-top" accept=".pdf,application/pdf" style="display:none" onchange="importarPDF(this.files[0]);this.value=''">
-  </div>
-  <div class="msg" id="pdf-msg"></div>
-  <div class="panel preview-wrap" id="pdf-preview" style="display:none;margin-top:12px;border-top:none;padding-top:18px"></div>
-
-  <!-- Formulario -->
-  <h2>Añadir registro manual</h2>
-  <div class="panel">
-    <div class="grid form-grid">
-      <div><label for="f-fecha">Fecha</label><input type="date" id="f-fecha"></div>
-      <div><label for="f-nombre">Nombre</label><input type="text" id="f-nombre" placeholder="Ej. María López"></div>
-      <div><label for="f-rol">Posición</label>
-        <select id="f-rol">
-          <option value="server">Server</option>
-          <option value="kitchen">Kitchen</option>
-          <option value="supervisor">Supervisor</option>
-          <option value="bartender">Bartender</option>
-          <option value="host">Host</option>
-          <option value="otro">Otro</option>
-        </select>
+  <div id="resultados">
+    <div class="barra">
+      <div>
+        <h2>Resultados del evento</h2>
+        <div class="archivo" id="nombre-archivo"></div>
       </div>
-      <div><label for="f-trab">Horas trabajadas</label><input type="number" id="f-trab" min="0" step="0.25" placeholder="Ej. 9.5"></div>
-      <div><label for="f-prog">Horas programadas</label><input type="number" id="f-prog" min="0" step="0.25" value="8"></div>
-      <div><button class="btn" id="btn-add" onclick="agregar()">Guardar registro</button></div>
-    </div>
-    <div class="msg" id="form-msg"></div>
-  </div>
-
-  <!-- Filtros -->
-  <h2>Resumen</h2>
-  <div class="panel">
-    <div class="grid filters">
-      <div><label for="q-nombre">Filtrar por nombre</label><input type="text" id="q-nombre" placeholder="Todos" oninput="render()"></div>
-      <div><label for="q-desde">Desde</label><input type="date" id="q-desde" onchange="render()"></div>
-      <div><label for="q-hasta">Hasta</label><input type="date" id="q-hasta" onchange="render()"></div>
-      <div><label for="q-tarifa">Tarifa por hora ($)</label><input type="number" id="q-tarifa" min="0" step="0.5" placeholder="Ej. 12.50" oninput="render()"></div>
-      <div><button class="btn secondary" onclick="limpiarFiltros()">Quitar filtros</button></div>
+      <div class="acciones">
+        <div>
+          <label for="tarifa">Tarifa por hora ($)</label>
+          <input type="number" id="tarifa" min="0" step="0.5" placeholder="Ej. 12.50" oninput="pintar()">
+        </div>
+        <button class="btn" onclick="descargarReporte()">⬇ Descargar reporte PDF</button>
+        <button class="btn suave" onclick="reiniciar()">Analizar otro PDF</button>
+      </div>
     </div>
 
-    <div class="grid cards" id="cards"></div>
+    <div class="tarjetas" id="tarjetas"></div>
+
+    <section>
+      <h3>Por posición</h3>
+      <div class="tabla" id="tabla-posiciones"></div>
+    </section>
+
+    <section>
+      <h3>Por persona</h3>
+      <div class="tabla" id="tabla-personas"></div>
+    </section>
+
+    <details id="detalle-registros">
+      <summary>Ver registros día a día leídos del PDF</summary>
+      <div class="tabla" id="tabla-registros" style="margin-top:8px"></div>
+    </details>
+
+    <details id="detalle-texto">
+      <summary>Ver todo el texto leído del PDF</summary>
+      <div id="texto-completo"></div>
+    </details>
   </div>
 
-  <!-- Por posición -->
-  <h2>Horas extra y salidas por posición</h2>
-  <div class="panel table-scroll" id="por-rol"></div>
-
-  <!-- Por persona -->
-  <h2>Acumulado por persona</h2>
-  <div class="panel table-scroll" id="por-persona"></div>
-
-  <!-- Registros -->
-  <h2>Registros guardados</h2>
-  <div class="panel table-scroll">
-    <div id="tabla-registros"></div>
-    <div class="row-actions">
-      <button class="btn secondary" onclick="document.getElementById('pdf-input-top').click()">Importar PDF</button>
-      <button class="btn secondary" onclick="document.getElementById('csv-input').click()">Importar CSV</button>
-      <input type="file" id="csv-input" accept=".csv,text/csv" style="display:none" onchange="importarCSV(this.files[0])">
-      <button class="btn secondary" onclick="exportarCSV()">Exportar CSV</button>
-      <button class="btn secondary" onclick="descargarPDF()">Descargar reporte PDF</button>
-      <button class="btn danger" onclick="borrarTodo()">Borrar todos los datos</button>
-    </div>
-    <div class="msg" id="csv-msg"></div>
-  </div>
-
-</main>
+</div>
 
 <script>
-const KEY = "registros-horas";
-const ROLES = {
-  server:{label:"Server",color:"#136251"},
-  kitchen:{label:"Kitchen",color:"#B9750F"},
-  supervisor:{label:"Supervisor",color:"#4A4E9E"},
-  bartender:{label:"Bartender",color:"#8A3D6E"},
-  host:{label:"Host",color:"#2A6F8A"},
-  otro:{label:"Otro",color:"#5C6B66"},
-};
-let registros = [];
-
-const fmt = n => {
-  const v = Math.round(n*100)/100;
-  return (v % 1 === 0 ? v : v.toFixed(2)) + " h";
-};
-const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-
-async function cargar(){
-  try{
-    const r = localStorage.getItem(KEY);
-    registros = r ? JSON.parse(r) : [];
-  }catch(e){ registros = []; }
-  render();
-}
-
-async function persistir(){
-  try{
-    localStorage.setItem(KEY, JSON.stringify(registros));
-    return true;
-  }catch(e){
-    mostrarMsg("No se pudo guardar en este navegador (\u00bfmodo inc\u00f3gnito o sin espacio?).","err");
-    return false;
-  }
-}
-
-function mostrarMsg(t, tipo){
-  const m = document.getElementById("form-msg");
-  m.textContent = t; m.className = "msg " + tipo;
-  clearTimeout(m._t); m._t = setTimeout(()=>{ m.className = "msg"; }, 4000);
-}
-
-async function agregar(){
-  const fecha = document.getElementById("f-fecha").value;
-  const nombre = document.getElementById("f-nombre").value.trim();
-  const rol = document.getElementById("f-rol").value;
-  const trab = parseFloat(document.getElementById("f-trab").value);
-  const prog = parseFloat(document.getElementById("f-prog").value);
-  if(!fecha){ mostrarMsg("Falta la fecha.","err"); return; }
-  if(!nombre){ mostrarMsg("Falta el nombre.","err"); return; }
-  if(isNaN(trab) || trab < 0){ mostrarMsg("Indica las horas trabajadas.","err"); return; }
-  if(isNaN(prog) || prog < 0){ mostrarMsg("Indica las horas programadas.","err"); return; }
-
-  const extra = Math.max(0, trab - prog);
-  const faltantes = Math.max(0, prog - trab);
-  registros.push({ id: Date.now() + "-" + Math.random().toString(36).slice(2,7),
-    fecha, nombre, rol, trab, prog, extra, faltantes });
-  const ok = await persistir();
-  if(ok){
-    mostrarMsg("Registro guardado: " + nombre + " (" + fecha + ")","ok");
-    document.getElementById("f-trab").value = "";
-    document.getElementById("f-nombre").value = "";
-    render();
-  } else { registros.pop(); }
-}
-
-async function eliminar(id){
-  const prev = registros.slice();
-  registros = registros.filter(r => r.id !== id);
-  const ok = await persistir();
-  if(!ok){ registros = prev; }
-  render();
-}
-
-async function borrarTodo(){
-  if(!confirm("¿Seguro que quieres borrar todos los registros guardados? Esta acción no se puede deshacer.")) return;
-  const prev = registros.slice();
-  registros = [];
-  const ok = await persistir();
-  if(!ok){ registros = prev; }
-  render();
-}
-
-function limpiarFiltros(){
-  document.getElementById("q-nombre").value = "";
-  document.getElementById("q-desde").value = "";
-  document.getElementById("q-hasta").value = "";
-  render();
-}
-
-function filtrados(){
-  const q = document.getElementById("q-nombre").value.trim().toLowerCase();
-  const d = document.getElementById("q-desde").value;
-  const h = document.getElementById("q-hasta").value;
-  return registros.filter(r =>
-    (!q || r.nombre.toLowerCase().includes(q)) &&
-    (!d || r.fecha >= d) &&
-    (!h || r.fecha <= h)
-  );
-}
-
-function chip(rol){
-  const m = ROLES[rol] || ROLES.otro;
-  return `<span class="chip" style="background:${m.color}1A;color:${m.color}">${m.label}</span>`;
-}
-
-function tarifaActual(){
-  return parseFloat(document.getElementById("q-tarifa").value) || 0;
-}
-
-// Horas a pagar: por persona, extras menos salidas antes (no baja de 0)
-function calcularPago(data, tarifa){
-  const porPersona = {};
-  for(const r of data){
-    const k = r.nombre.toLowerCase();
-    if(!porPersona[k]) porPersona[k] = {ex:0, fa:0};
-    porPersona[k].ex += r.extra;
-    porPersona[k].fa += r.faltantes;
-  }
-  let horasPagar = 0;
-  for(const k in porPersona) horasPagar += Math.max(0, porPersona[k].ex - porPersona[k].fa);
-  return {horasPagar, totalPagar: horasPagar * tarifa};
-}
-
-function render(){
-  const data = filtrados();
-  const tarifa = tarifaActual();
-  const totEx = data.reduce((s,r)=>s+r.extra,0);
-  const totFa = data.reduce((s,r)=>s+r.faltantes,0);
-  const pendiente = Math.max(0, totEx - totFa);
-  const persEx = new Set(data.filter(r=>r.extra>0).map(r=>r.nombre)).size;
-  const persFa = new Set(data.filter(r=>r.faltantes>0).map(r=>r.nombre)).size;
-  const pago = calcularPago(data, tarifa);
-
-  // Tarjetas
-  document.getElementById("cards").innerHTML = `
-    <div class="card" style="background:var(--ot-soft)">
-      <div class="lbl" style="color:var(--ot)">Horas extra totales</div>
-      <div class="val" style="color:var(--ot)">${fmt(totEx)}</div>
-      <div class="det">${persEx} ${persEx===1?"persona":"personas"}</div>
-    </div>
-    <div class="card" style="background:var(--def-soft)">
-      <div class="lbl" style="color:var(--def)">Salidas antes (horas)</div>
-      <div class="val" style="color:var(--def)">${fmt(totFa)}</div>
-      <div class="det">${persFa} ${persFa===1?"persona":"personas"}</div>
-    </div>
-    <div class="card" style="background:${pendiente>0?"var(--def-soft)":"var(--ok-soft)"}">
-      <div class="lbl" style="color:${pendiente>0?"var(--def)":"var(--ok)"}">Horas a pagar</div>
-      <div class="val" style="color:${pendiente>0?"var(--def)":"var(--ok)"}">${fmt(pago.horasPagar)}</div>
-      <div class="det">Extras menos salidas antes, por persona</div>
-    </div>
-    <div class="card" style="background:var(--brand-soft)">
-      <div class="lbl" style="color:var(--brand)">Total a pagar ($)</div>
-      <div class="val" style="color:var(--brand)">${tarifa>0 ? fmtDinero(pago.totalPagar) : "—"}</div>
-      <div class="det">${tarifa>0 ? "a " + fmtDinero(tarifa) + " la hora" : "Indica la tarifa por hora arriba"}</div>
-    </div>`;
-
-  // Por posición
-  const porRol = {};
-  for(const r of data){
-    if(!porRol[r.rol]) porRol[r.rol] = {ex:0, fa:0, pers:new Set()};
-    porRol[r.rol].ex += r.extra;
-    porRol[r.rol].fa += r.faltantes;
-    if(r.extra>0) porRol[r.rol].pers.add(r.nombre);
-  }
-  const rolesConDatos = Object.keys(porRol);
-  document.getElementById("por-rol").innerHTML = rolesConDatos.length === 0
-    ? `<div class="empty">Todavía no hay datos${registros.length?" con estos filtros":""}. Añade un registro arriba para empezar.</div>`
-    : `<table><thead><tr><th>Posición</th><th>Personas con extra</th><th>Horas extra</th><th>Horas por salidas antes</th><th>Balance</th></tr></thead><tbody>` +
-      rolesConDatos.map(rol => {
-        const v = porRol[rol]; const bal = v.ex - v.fa;
-        return `<tr><td>${chip(rol)}</td><td>${v.pers.size}</td>
-          <td class="${v.ex>0?"num-ot":"muted"}">${fmt(v.ex)}</td>
-          <td class="${v.fa>0?"num-def":"muted"}">${fmt(v.fa)}</td>
-          <td class="${bal>0?"num-ot":bal<0?"num-def":"muted"}">${bal>0?"+":""}${fmt(bal)}</td></tr>`;
-      }).join("") + `</tbody></table>`;
-
-  // Por persona
-  const porPersona = {};
-  for(const r of data){
-    const k = r.nombre.toLowerCase();
-    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, fa:0, dias:0};
-    porPersona[k].ex += r.extra;
-    porPersona[k].fa += r.faltantes;
-    porPersona[k].dias += 1;
-    porPersona[k].rol = r.rol;
-  }
-  const personas = Object.values(porPersona).sort((a,b)=>b.ex-a.ex);
-  const totPagarPersonas = personas.reduce((s,p)=>s+Math.max(0,p.ex-p.fa),0);
-  document.getElementById("por-persona").innerHTML = personas.length === 0
-    ? `<div class="empty">Sin datos que mostrar.</div>`
-    : `<table><thead><tr><th>Nombre</th><th>Posición</th><th>Días registrados</th><th>Horas extra</th><th>Salidas antes</th><th>Balance</th><th>Horas a pagar</th><th>A pagar ($)</th></tr></thead><tbody>` +
-      personas.map(p => {
-        const bal = p.ex - p.fa;
-        const hp = Math.max(0, bal);
-        return `<tr><td style="font-weight:600">${esc(p.nombre)}</td><td>${chip(p.rol)}</td><td>${p.dias}</td>
-          <td class="${p.ex>0?"num-ot":"muted"}">${fmt(p.ex)}</td>
-          <td class="${p.fa>0?"num-def":"muted"}">${fmt(p.fa)}</td>
-          <td class="${bal>0?"num-ot":bal<0?"num-def":"muted"}">${bal>0?"+":""}${fmt(bal)}</td>
-          <td class="${hp>0?"num-ot":"muted"}">${fmt(hp)}</td>
-          <td style="font-weight:600">${tarifa>0 ? fmtDinero(hp*tarifa) : "—"}</td></tr>`;
-      }).join("") +
-      `<tr style="background:var(--brand-soft)"><td style="font-weight:700">TOTAL</td><td></td><td></td>
-        <td class="num-ot" style="font-weight:700">${fmt(totEx)}</td>
-        <td class="num-def" style="font-weight:700">${fmt(totFa)}</td>
-        <td></td>
-        <td class="num-ot" style="font-weight:700">${fmt(totPagarPersonas)}</td>
-        <td style="font-weight:700;color:var(--brand)">${tarifa>0 ? fmtDinero(totPagarPersonas*tarifa) : "—"}</td></tr>` +
-      `</tbody></table>`;
-
-  // Registros individuales
-  const orden = data.slice().sort((a,b)=> b.fecha.localeCompare(a.fecha));
-  document.getElementById("tabla-registros").innerHTML = orden.length === 0
-    ? `<div class="empty">No hay registros guardados${registros.length?" con estos filtros":""}.</div>`
-    : `<table><thead><tr><th>Fecha</th><th>Nombre</th><th>Posición</th><th>Trabajadas</th><th>Programadas</th><th>Extra</th><th>Salió antes</th><th></th></tr></thead><tbody>` +
-      orden.map(r => `<tr>
-        <td>${r.fecha}</td><td style="font-weight:600">${esc(r.nombre)}</td><td>${chip(r.rol)}</td>
-        <td>${fmt(r.trab)}</td><td>${fmt(r.prog)}</td>
-        <td class="${r.extra>0?"num-ot":"muted"}">${fmt(r.extra)}</td>
-        <td class="${r.faltantes>0?"num-def":"muted"}">${fmt(r.faltantes)}</td>
-        <td><button class="btn danger" onclick="eliminar('${r.id}')">Eliminar</button></td></tr>`).join("") +
-      `</tbody></table>`;
-}
-
-function msgCSV(t, tipo){
-  const m = document.getElementById("csv-msg");
-  m.textContent = t; m.className = "msg " + tipo;
-  clearTimeout(m._t); m._t = setTimeout(()=>{ m.className = "msg"; }, 6000);
-}
-
-function parseLineaCSV(linea){
-  const out = []; let cur = ""; let enComillas = false;
-  for(let i = 0; i < linea.length; i++){
-    const ch = linea[i];
-    if(enComillas){
-      if(ch === '"' && linea[i+1] === '"'){ cur += '"'; i++; }
-      else if(ch === '"'){ enComillas = false; }
-      else cur += ch;
-    } else {
-      if(ch === '"') enComillas = true;
-      else if(ch === ',' || ch === ';'){ out.push(cur); cur = ""; }
-      else cur += ch;
-    }
-  }
-  out.push(cur);
-  return out.map(s => s.trim());
-}
-
-async function importarCSV(file){
-  if(!file) return;
-  try{
-    const texto = (await file.text()).replace(/^\uFEFF/, "");
-    const lineas = texto.split(/\r?\n/).filter(l => l.trim());
-    if(lineas.length < 2){ msgCSV("El CSV no tiene datos.","err"); return; }
-    const head = parseLineaCSV(lineas[0]).map(h => h.toLowerCase());
-    const iF = head.findIndex(h => h.startsWith("fecha"));
-    const iN = head.findIndex(h => h.startsWith("nombre") || h.startsWith("empleado"));
-    const iR = head.findIndex(h => h.startsWith("posicion") || h.startsWith("posici") || h.startsWith("rol"));
-    const iT = head.findIndex(h => h.includes("trabajada"));
-    const iP = head.findIndex(h => h.includes("programada"));
-    if(iF < 0 || iN < 0 || iT < 0){
-      msgCSV("No reconozco las columnas. El CSV debe tener al menos: Fecha, Nombre, Horas trabajadas (como el que exporta esta pagina).","err");
-      return;
-    }
-    const nuevos = [];
-    for(let i = 1; i < lineas.length; i++){
-      const c = parseLineaCSV(lineas[i]);
-      const fecha = c[iF] || "";
-      const nombre = (c[iN] || "").trim();
-      const rol = iR >= 0 && ROLES[(c[iR]||"").toLowerCase()] ? c[iR].toLowerCase() : "otro";
-      const trab = parseFloat(c[iT]);
-      const prog = iP >= 0 ? parseFloat(c[iP]) : NaN;
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !nombre || isNaN(trab)) continue;
-      const p = isNaN(prog) ? 8 : prog;
-      nuevos.push({ id: Date.now() + "-" + Math.random().toString(36).slice(2,7),
-        fecha, nombre, rol, trab, prog: p,
-        extra: Math.max(0, trab - p), faltantes: Math.max(0, p - trab) });
-    }
-    if(nuevos.length === 0){ msgCSV("No se encontro ninguna fila valida en el CSV.","err"); return; }
-    const prev = registros.slice();
-    registros = registros.concat(nuevos);
-    const ok = await persistir();
-    if(ok){ msgCSV(nuevos.length + " registros importados.","ok"); render(); }
-    else { registros = prev; }
-  }catch(e){
-    msgCSV("No se pudo leer el archivo CSV.","err");
-  }finally{
-    document.getElementById("csv-input").value = "";
-  }
-}
-
-function exportarCSV(){
-  const data = filtrados();
-  if(data.length === 0){ mostrarMsg("No hay registros que exportar.","err"); return; }
-  const head = ["Fecha","Nombre","Posicion","Horas trabajadas","Horas programadas","Horas extra","Horas faltantes"];
-  const lines = [head.join(",")].concat(data.map(r =>
-    [r.fecha, '"'+r.nombre.replace(/"/g,'""')+'"', r.rol, r.trab, r.prog, r.extra, r.faltantes].join(",")));
-  const blob = new Blob(["\uFEFF"+lines.join("\n")], {type:"text/csv;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "registro-horas.csv";
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-/* ---------- Importar PDF ---------- */
-
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-let filasDetectadasPDF = [];
-let pdfPaginasActuales = [];
-let pdfArchivoActual = "";
+const POSICIONES = {
+  server:     {label:"Server",     claves:["server","mesero","mesera","waiter","waitress"]},
+  kitchen:    {label:"Kitchen",    claves:["kitchen","cocina","cocinero","cocinera","cook","chef"]},
+  pantry:     {label:"Pantry",     claves:["pantry","despensa"]},
+  bartender:  {label:"Bartender",  claves:["bartender","barra","barman"]},
+  busser:     {label:"Busser",     claves:["busser","busboy"]},
+  dishwasher: {label:"Dishwasher", claves:["dishwasher","lavaplatos","steward"]},
+  host:       {label:"Host",       claves:["host","hostess","anfitrion","anfitriona"]},
+  supervisor: {label:"Supervisor", claves:["supervisor","captain","capitan","lead","encargado","encargada","manager"]},
+  otro:       {label:"Otro",       claves:[]}
+};
 
-function nombreRolPorTexto(txt){
-  const t = (txt||"").toLowerCase();
-  for(const k in ROLES){ if(ROLES[k].label.toLowerCase() === t || k === t) return k; }
-  return null;
+let registros = [];       // {fecha, nombre, rol, trab, prog, extra, antes}
+let paginasTexto = [];    // [{numero, lineas:[]}]
+let nombreArchivo = "";
+
+/* ---------- Utilidades ---------- */
+const fmt = n => (Math.round(n*100)/100).toLocaleString("es-ES", {maximumFractionDigits:2}) + " h";
+const fmtDinero = n => "$" + (Math.round(n*100)/100).toLocaleString("es-ES", {minimumFractionDigits:2, maximumFractionDigits:2});
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const tarifa = () => parseFloat(document.getElementById("tarifa").value) || 0;
+
+function mensaje(t, tipo){
+  const m = document.getElementById("mensaje");
+  m.textContent = t; m.className = "msg " + (tipo||"");
 }
 
-// Reconstruye lineas de texto a partir de los items del PDF agrupando por posicion vertical
-function lineasDesdeContenido(items){
+/* ---------- Lectura del PDF ---------- */
+function lineasDePagina(items){
   const filas = [];
   const TOL = 3;
   for(const it of items){
+    if(!it.str || !it.str.trim()) continue;
     const y = Math.round(it.transform[5]);
     let fila = filas.find(f => Math.abs(f.y - y) <= TOL);
     if(!fila){ fila = {y, partes:[]}; filas.push(fila); }
@@ -490,522 +181,380 @@ function lineasDesdeContenido(items){
     .filter(l => l.length > 0);
 }
 
-async function extraerLineasPDF(file){
+async function leerPDF(file){
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({data: buf}).promise;
-  let lineas = [];
   const paginas = [];
   for(let p = 1; p <= pdf.numPages; p++){
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    const lineasPagina = lineasDesdeContenido(content.items);
-    paginas.push({numero: p, lineas: lineasPagina});
-    lineas = lineas.concat(lineasPagina);
+    paginas.push({numero: p, lineas: lineasDePagina(content.items)});
   }
-  return {lineas, paginas, numPaginas: pdf.numPages};
+  return paginas;
 }
 
+/* ---------- Interpretación de las líneas ---------- */
 function normalizarFecha(txt){
   let m = txt.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
   if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
   m = txt.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
   if(m){
-    let a = parseInt(m[1]), b = parseInt(m[2]);
-    // Formato DD/MM por defecto (uso hispano); si el "mes" es > 12, es MM/DD
-    let dia = a, mes = b;
-    if(b > 12 && a <= 12){ dia = b; mes = a; }
+    let dia = parseInt(m[1]), mes = parseInt(m[2]);
+    if(mes > 12 && dia <= 12){ [dia, mes] = [mes, dia]; }
     if(mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
     return `${m[3]}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
   }
   return null;
 }
 
-// Intenta reconocer filas tipo tabla (columnas separadas por 2+ espacios) o texto libre por linea
-function parsearLineasAregistros(lineas){
-  const detectadas = [];
+function detectarPosicion(texto){
+  const t = texto.toLowerCase();
+  for(const k in POSICIONES){
+    for(const clave of POSICIONES[k].claves){
+      if(t.includes(clave)) return k;
+    }
+  }
+  return "otro";
+}
+
+// Convierte "18:30" a horas decimales; también acepta "9.5" o "9,5"
+function aHoras(txt){
+  const hm = txt.match(/^(\d{1,2}):(\d{2})$/);
+  if(hm) return parseInt(hm[1]) + parseInt(hm[2])/60;
+  return parseFloat(txt.replace(",", "."));
+}
+
+function interpretar(lineas){
+  const filas = [];
   for(const linea of lineas){
     const fecha = normalizarFecha(linea);
     if(!fecha) continue;
 
-    // quitar la fecha del texto para analizar el resto
-    let resto = linea.replace(/(\d{4}-\d{1,2}-\d{1,2})|(\d{1,2}\/\d{1,2}\/\d{4})|(\d{1,2}-\d{1,2}-\d{4})/, " ").trim();
+    let resto = linea.replace(/(\d{4}-\d{1,2}-\d{1,2})|(\d{1,2}[\/-]\d{1,2}[\/-]\d{4})/, " ").trim();
 
-    // extraer todos los numeros (horas) del resto
-    const numeros = [...resto.matchAll(/\d+([.,]\d+)?/g)].map(m => parseFloat(m[0].replace(",", ".")));
-    // el nombre es el texto antes del primer numero encontrado
-    const idxPrimerNum = resto.search(/\d+([.,]\d+)?/);
-    let nombre = (idxPrimerNum >= 0 ? resto.slice(0, idxPrimerNum) : resto).trim();
-    nombre = nombre.replace(/[-–:|,]+$/, "").trim();
+    // Rango de horario tipo "18:00 - 02:30" → duración
+    const rango = resto.match(/(\d{1,2}:\d{2})\s*[-–a]\s*(\d{1,2}:\d{2})/);
+    let trab = NaN, prog = 8;
+    if(rango){
+      let ini = aHoras(rango[1]), fin = aHoras(rango[2]);
+      if(fin < ini) fin += 24; // cruzó medianoche
+      trab = fin - ini;
+      resto = resto.replace(rango[0], " ");
+      const otros = [...resto.matchAll(/\d+([.,]\d+)?/g)].map(m => parseFloat(m[0].replace(",",".")));
+      if(otros.length >= 1 && otros[0] > 0 && otros[0] <= 24) prog = otros[0];
+    } else {
+      const numeros = [...resto.matchAll(/\d+([.,]\d+)?/g)].map(m => parseFloat(m[0].replace(",",".")));
+      if(numeros.length >= 2){ trab = numeros[0]; prog = numeros[1]; }
+      else if(numeros.length === 1){ trab = numeros[0]; }
+    }
+    if(isNaN(trab) || trab <= 0 || trab > 24) continue;
+    if(isNaN(prog) || prog <= 0 || prog > 24) prog = 8;
+
+    const idxNum = resto.search(/\d/);
+    let nombre = (idxNum >= 0 ? resto.slice(0, idxNum) : resto).trim().replace(/[-–:|,]+$/,"").trim();
+    const rol = detectarPosicion(linea);
+    if(rol !== "otro"){
+      for(const clave of POSICIONES[rol].claves){
+        nombre = nombre.replace(new RegExp("\\b"+clave+"\\b","i"), "").trim();
+      }
+      nombre = nombre.replace(new RegExp("\\b"+POSICIONES[rol].label+"\\b","i"), "").trim();
+    }
     if(!nombre) continue;
 
-    // detectar posicion si aparece alguna etiqueta de rol en la linea
-    let rol = "otro";
-    for(const k in ROLES){
-      if(linea.toLowerCase().includes(ROLES[k].label.toLowerCase()) || linea.toLowerCase().includes(k)){
-        rol = k; break;
-      }
-    }
-    // quitar el nombre del rol detectado si quedo pegado al nombre
-    nombre = nombre.replace(new RegExp(ROLES[rol].label, "i"), "").trim();
-
-    let trab = NaN, prog = 8;
-    if(numeros.length >= 2){ trab = numeros[0]; prog = numeros[1]; }
-    else if(numeros.length === 1){ trab = numeros[0]; }
-    if(isNaN(trab) || trab < 0 || trab > 24) continue;
-    if(isNaN(prog) || prog < 0 || prog > 24) prog = 8;
-
-    detectadas.push({
+    filas.push({
       fecha, nombre, rol, trab, prog,
-      extra: Math.max(0, trab - prog), faltantes: Math.max(0, prog - trab)
+      extra: Math.max(0, trab - prog),
+      antes: Math.max(0, prog - trab)
     });
   }
-  return detectadas;
+  return filas;
 }
 
-function msgPDF(t, tipo){
-  const m = document.getElementById("pdf-msg");
-  m.textContent = t; m.className = "msg " + tipo;
-  clearTimeout(m._t); m._t = setTimeout(()=>{ m.className = "msg"; }, 6000);
-}
-
-async function importarPDF(file){
+/* ---------- Flujo principal ---------- */
+async function analizar(file){
   if(!file) return;
   if(!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){
-    msgPDF("El archivo debe ser un PDF.", "err"); return;
+    mensaje("El archivo debe ser un PDF.", "err"); return;
   }
-  const titulo = document.getElementById("btn-pdf-import");
-  const original = titulo.textContent;
-  titulo.innerHTML = '<span class="spinner"></span>Leyendo PDF…';
+  const titulo = document.getElementById("zona-titulo");
+  titulo.innerHTML = '<span class="spinner"></span>Leyendo el PDF…';
+  mensaje("");
   try{
-    const { lineas, paginas } = await extraerLineasPDF(file);
-    const detectadas = parsearLineasAregistros(lineas);
-    filasDetectadasPDF = detectadas;
-    pdfPaginasActuales = paginas;
-    pdfArchivoActual = file.name;
-    if(detectadas.length === 0){
-      msgPDF("No se detectaron registros con fecha reconocible. Abajo puedes ver todo el contenido leído del PDF.", "err");
+    paginasTexto = await leerPDF(file);
+    registros = interpretar(paginasTexto.flatMap(p => p.lineas));
+    nombreArchivo = file.name;
+    if(registros.length === 0){
+      mensaje("No se reconocieron registros de horas en el PDF. Abre \"Ver todo el texto leído\" abajo para revisar cómo vino el contenido.", "err");
     } else {
-      msgPDF(detectadas.length + " registro(s) leídos de \"" + file.name + "\". Revisa el análisis abajo.", "ok");
+      mensaje(registros.length + " registros leídos correctamente.", "ok");
     }
-    mostrarPreviewPDF();
-    document.getElementById("pdf-preview").scrollIntoView({behavior:"smooth", block:"start"});
+    document.getElementById("nombre-archivo").textContent = nombreArchivo + " · " + paginasTexto.length + " página(s)";
+    document.getElementById("resultados").style.display = "block";
+    pintar();
+    document.getElementById("resultados").scrollIntoView({behavior:"smooth", block:"start"});
   }catch(e){
-    msgPDF("No se pudo leer el PDF: " + e.message, "err");
+    mensaje("No se pudo leer el PDF: " + e.message, "err");
   }finally{
-    titulo.textContent = original;
+    titulo.textContent = "Arrastra el PDF aquí o haz clic para elegirlo";
   }
 }
 
-function analisisDesdeFilas(filas, tarifa){
+function resumen(){
   const porPersona = {};
-  for(const r of filas){
+  for(const r of registros){
     const k = r.nombre.toLowerCase();
-    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, fa:0, dias:0};
-    const extra = Math.max(0, r.trab - r.prog);
-    const falt = Math.max(0, r.prog - r.trab);
-    porPersona[k].ex += extra;
-    porPersona[k].fa += falt;
-    porPersona[k].dias += 1;
-    porPersona[k].rol = r.rol;
-  }
-  const personas = Object.values(porPersona).map(p => {
-    p.balance = p.ex - p.fa;
-    p.pagar = Math.max(0, p.balance) * (tarifa || 0);
-    return p;
-  }).sort((a,b)=>b.ex-a.ex);
-  const totEx = personas.reduce((s,p)=>s+p.ex,0);
-  const totFa = personas.reduce((s,p)=>s+p.fa,0);
-  const horasPagar = personas.reduce((s,p)=>s+Math.max(0,p.balance),0);
-  const totalPagar = personas.reduce((s,p)=>s+p.pagar,0);
-  return {personas, totEx, totFa, horasPagar, totalPagar};
-}
-
-function fmtDinero(n){
-  return "$" + (Math.round(n*100)/100).toLocaleString("es-ES", {minimumFractionDigits:2, maximumFractionDigits:2});
-}
-
-function renderAnalisisPDF(){
-  const tarifa = parseFloat(document.getElementById("pdf-tarifa")?.value) || 0;
-  const a = analisisDesdeFilas(filasDetectadasPDF, tarifa);
-  const cont = document.getElementById("pdf-analisis");
-  if(!cont) return;
-  cont.innerHTML = `
-    <div class="grid cards" style="margin-top:0">
-      <div class="card" style="background:var(--ot-soft)">
-        <div class="lbl" style="color:var(--ot)">Horas extra totales</div>
-        <div class="val" style="color:var(--ot)">${fmt(a.totEx)}</div>
-        <div class="det">${a.personas.filter(p=>p.ex>0).length} persona(s) con extras</div>
-      </div>
-      <div class="card" style="background:var(--def-soft)">
-        <div class="lbl" style="color:var(--def)">Se fueron antes (horas)</div>
-        <div class="val" style="color:var(--def)">${fmt(a.totFa)}</div>
-        <div class="det">${a.personas.filter(p=>p.fa>0).length} persona(s) salieron antes</div>
-      </div>
-      <div class="card" style="background:var(--brand-soft)">
-        <div class="lbl" style="color:var(--brand)">Horas a pagar</div>
-        <div class="val" style="color:var(--brand)">${fmt(a.horasPagar)}</div>
-        <div class="det">Extras menos salidas antes, por persona</div>
-      </div>
-      <div class="card" style="background:${a.totalPagar>0?"var(--ok-soft)":"#EEF1F0"}">
-        <div class="lbl" style="color:var(--ok)">Total a pagar</div>
-        <div class="val" style="color:var(--ok)">${tarifa>0 ? fmtDinero(a.totalPagar) : "—"}</div>
-        <div class="det">${tarifa>0 ? "a " + fmtDinero(tarifa) + " por hora" : "Indica la tarifa por hora arriba"}</div>
-      </div>
-    </div>
-    <div class="table-scroll" style="margin-top:14px">
-      <table><thead><tr>
-        <th>Nombre</th><th>Posición</th><th>Días</th><th>Horas extra</th><th>Se fue antes</th><th>Balance</th><th>A pagar</th>
-      </tr></thead><tbody>
-      ${a.personas.map(p=>`<tr>
-        <td style="font-weight:600">${esc(p.nombre)}</td><td>${chip(p.rol)}</td><td>${p.dias}</td>
-        <td class="${p.ex>0?'num-ot':'muted'}">${fmt(p.ex)}</td>
-        <td class="${p.fa>0?'num-def':'muted'}">${fmt(p.fa)}</td>
-        <td class="${p.balance>0?'num-ot':p.balance<0?'num-def':'muted'}">${p.balance>0?"+":""}${fmt(p.balance)}</td>
-        <td style="font-weight:600">${tarifa>0 ? fmtDinero(p.pagar) : "—"}</td>
-      </tr>`).join("")}
-      </tbody></table>
-    </div>`;
-}
-
-function descargarAnalisisPDF(){
-  if(filasDetectadasPDF.length === 0){ msgCSV("No hay datos del PDF para analizar.", "err"); return; }
-  const tarifa = parseFloat(document.getElementById("pdf-tarifa")?.value) || 0;
-  const a = analisisDesdeFilas(filasDetectadasPDF, tarifa);
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const marginX = 40;
-  let y = 50;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(21,36,32);
-  doc.text("Análisis de horas extra", marginX, y);
-  y += 20;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(90,100,96);
-  doc.text(`Archivo analizado: ${pdfArchivoActual}`, marginX, y); y += 14;
-  doc.text(`Generado: ${new Date().toLocaleString("es-ES")}`, marginX, y); y += 14;
-  if(tarifa > 0){ doc.text(`Tarifa por hora extra: ${fmtDinero(tarifa)}`, marginX, y); y += 14; }
-  y += 10;
-
-  // Tarjetas resumen
-  const cardW = (595 - marginX*2 - 30) / 4;
-  const cards = [
-    {label:"Horas extra", val: fmt(a.totEx), color:[185,117,15]},
-    {label:"Se fueron antes", val: fmt(a.totFa), color:[178,59,42]},
-    {label:"Horas a pagar", val: fmt(a.horasPagar), color:[19,98,81]},
-    {label:"Total a pagar", val: tarifa>0 ? fmtDinero(a.totalPagar) : "—", color:[29,122,69]}
-  ];
-  cards.forEach((c,i)=>{
-    const x = marginX + i*(cardW+10);
-    doc.setDrawColor(220,228,224);
-    doc.roundedRect(x, y, cardW, 54, 6, 6, "S");
-    doc.setFontSize(7.5);
-    doc.setTextColor(c.color[0],c.color[1],c.color[2]);
-    doc.text(c.label.toUpperCase(), x+8, y+16);
-    doc.setFontSize(13);
-    doc.setFont("helvetica","bold");
-    doc.text(String(c.val), x+8, y+38);
-    doc.setFont("helvetica","normal");
-  });
-  y += 54 + 26;
-
-  // Tabla por persona con total a pagar
-  doc.setFontSize(12); doc.setTextColor(21,36,32); doc.setFont("helvetica","bold");
-  doc.text("Detalle por persona", marginX, y);
-  const bodyPersonas = a.personas.map(p=>[
-    p.nombre, ROLES[p.rol].label, p.dias, fmt(p.ex), fmt(p.fa),
-    (p.balance>0?"+":"")+fmt(p.balance),
-    tarifa>0 ? fmtDinero(p.pagar) : "—"
-  ]);
-  bodyPersonas.push([
-    {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "",
-    {content:fmt(a.totEx), styles:{fontStyle:"bold"}},
-    {content:fmt(a.totFa), styles:{fontStyle:"bold"}},
-    {content:fmt(a.totEx - a.totFa), styles:{fontStyle:"bold"}},
-    {content: tarifa>0 ? fmtDinero(a.totalPagar) : "—", styles:{fontStyle:"bold"}}
-  ]);
-  doc.autoTable({
-    startY: y+10, margin:{left:marginX,right:marginX},
-    head: [["Nombre","Posición","Días","Horas extra","Se fue antes","Balance","A pagar"]],
-    body: bodyPersonas,
-    styles:{fontSize:9, cellPadding:6},
-    headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
-  });
-  y = doc.lastAutoTable.finalY + 24;
-
-  // Registros dia a dia del PDF
-  if(y > 650){ doc.addPage(); y = 50; }
-  doc.setFontSize(12); doc.setFont("helvetica","bold");
-  doc.text("Registros día a día (leídos del PDF)", marginX, y);
-  const orden = filasDetectadasPDF.slice().sort((x1,x2)=> x1.fecha.localeCompare(x2.fecha) || x1.nombre.localeCompare(x2.nombre));
-  doc.autoTable({
-    startY: y+10, margin:{left:marginX,right:marginX},
-    head: [["Fecha","Nombre","Posición","Trabajadas","Programadas","Extra","Se fue antes"]],
-    body: orden.map(r=>{
-      const ex = Math.max(0, r.trab - r.prog), fa = Math.max(0, r.prog - r.trab);
-      return [r.fecha, r.nombre, ROLES[r.rol].label, fmt(r.trab), fmt(r.prog), ex>0?fmt(ex):"—", fa>0?fmt(fa):"—"];
-    }),
-    styles:{fontSize:8.5, cellPadding:5},
-    headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
-  });
-
-  doc.save(`analisis-horas-extra-${new Date().toISOString().slice(0,10)}.pdf`);
-}
-
-function mostrarPreviewPDF(){
-  const cont = document.getElementById("pdf-preview");
-  const opcionesRol = Object.keys(ROLES).map(k => `<option value="${k}">${ROLES[k].label}</option>`).join("");
-  const totExDetectado = filasDetectadasPDF.reduce((s,r)=>s+r.extra,0);
-
-  const tablaDetectados = filasDetectadasPDF.length === 0
-    ? `<div class="empty">No se reconocieron filas con fecha + nombre + horas. Revisa el contenido completo abajo para ver cómo vino el texto del PDF.</div>`
-    : `<div class="table-scroll">
-      <table><thead><tr>
-        <th></th><th>Fecha</th><th>Nombre</th><th>Posición</th><th>Trabajadas</th><th>Programadas</th><th>Extra</th>
-      </tr></thead><tbody>
-      ${filasDetectadasPDF.map((r,i)=>`<tr class="preview-row-editable">
-        <td><input type="checkbox" class="chk" data-i="${i}" checked></td>
-        <td><input type="date" value="${r.fecha}" onchange="filasDetectadasPDF[${i}].fecha=this.value;renderAnalisisPDF()"></td>
-        <td><input type="text" value="${esc(r.nombre)}" onchange="filasDetectadasPDF[${i}].nombre=this.value;renderAnalisisPDF()"></td>
-        <td><select onchange="filasDetectadasPDF[${i}].rol=this.value;renderAnalisisPDF()">${opcionesRol.replace(`value="${r.rol}"`, `value="${r.rol}" selected`)}</select></td>
-        <td><input type="number" step="0.25" value="${r.trab}" onchange="filasDetectadasPDF[${i}].trab=parseFloat(this.value)||0;renderAnalisisPDF()"></td>
-        <td><input type="number" step="0.25" value="${r.prog}" onchange="filasDetectadasPDF[${i}].prog=parseFloat(this.value)||0;renderAnalisisPDF()"></td>
-        <td class="${r.extra>0?'num-ot':'muted'}">${fmt(r.extra)}</td>
-      </tr>`).join("")}
-      </tbody></table>
-    </div>
-    <div class="row-actions">
-      <button class="btn" onclick="confirmarImportPDF()">Importar seleccionados</button>
-      <button class="btn secondary" onclick="cancelarPreviewPDF()">Cancelar</button>
-    </div>`;
-
-  const detalleCompleto = pdfPaginasActuales.map(pg => `
-    <details ${pdfPaginasActuales.length<=1?"open":""} style="margin-bottom:8px">
-      <summary style="cursor:pointer;font-weight:600;font-size:13.5px;padding:6px 0">Página ${pg.numero} (${pg.lineas.length} líneas)</summary>
-      <div style="background:#F7F9F8;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:12.5px;line-height:1.6;white-space:pre-wrap;max-height:320px;overflow:auto">${
-        pg.lineas.map(l => esc(l)).join("\n") || "(sin texto extraíble en esta página — puede ser una imagen escaneada)"
-      }</div>
-    </details>`).join("");
-
-  cont.innerHTML = `
-    ${filasDetectadasPDF.length > 0 ? `
-    <div class="preview-head">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:var(--brand)">Resultados del evento — "${esc(pdfArchivoActual)}"</div>
-      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
-        <div>
-          <label for="pdf-tarifa">Tarifa por hora ($)</label>
-          <input type="number" id="pdf-tarifa" min="0" step="0.5" placeholder="Ej. 12.50" style="width:130px" oninput="renderAnalisisPDF()">
-        </div>
-        <button class="btn" onclick="descargarAnalisisPDF()">⬇ Descargar resultados en PDF</button>
-      </div>
-    </div>
-    <div id="pdf-analisis"></div>
-
-    <details style="margin-top:22px">
-      <summary style="cursor:pointer;font-weight:600;font-size:14.5px;padding:6px 0">✏️ Corregir datos leídos del PDF (${filasDetectadasPDF.length} filas) o importarlos al registro</summary>
-      <div style="margin-top:10px">${tablaDetectados}</div>
-    </details>
-    ` : `
-    <div class="preview-head">
-      <div><strong>No se reconocieron registros de horas</strong> en "${esc(pdfArchivoActual)}"</div>
-    </div>
-    ${tablaDetectados}
-    `}
-
-    <details style="margin-top:12px">
-      <summary style="cursor:pointer;font-weight:600;font-size:14.5px;padding:6px 0">📄 Ver todo el texto leído del PDF (${pdfPaginasActuales.length} página(s))</summary>
-      <div style="margin-top:10px">${detalleCompleto}</div>
-    </details>
-    ${filasDetectadasPDF.length === 0 ? `<div class="row-actions"><button class="btn secondary" onclick="cancelarPreviewPDF()">Cerrar</button></div>` : ""}
-  `;
-  cont.style.display = "block";
-  renderAnalisisPDF();
-}
-
-function cancelarPreviewPDF(){
-  filasDetectadasPDF = [];
-  pdfPaginasActuales = [];
-  pdfArchivoActual = "";
-  document.getElementById("pdf-preview").style.display = "none";
-  document.getElementById("pdf-preview").innerHTML = "";
-}
-
-async function confirmarImportPDF(){
-  const marcados = [...document.querySelectorAll("#pdf-preview .chk:checked")].map(c => parseInt(c.dataset.i));
-  const seleccion = marcados.map(i => filasDetectadasPDF[i]).filter(r => r.fecha && r.nombre && !isNaN(r.trab));
-  if(seleccion.length === 0){ msgCSV("No hay filas seleccionadas para importar.", "err"); return; }
-  const nuevos = seleccion.map(r => ({
-    id: Date.now() + "-" + Math.random().toString(36).slice(2,7),
-    fecha: r.fecha, nombre: r.nombre, rol: r.rol, trab: r.trab, prog: r.prog,
-    extra: Math.max(0, r.trab - r.prog), faltantes: Math.max(0, r.prog - r.trab)
-  }));
-  const prev = registros.slice();
-  registros = registros.concat(nuevos);
-  const ok = await persistir();
-  if(ok){
-    msgCSV(nuevos.length + " registros importados desde el PDF.", "ok");
-    cancelarPreviewPDF();
-    render();
-  } else {
-    registros = prev;
-  }
-}
-
-/* ---------- Descargar reporte en PDF ---------- */
-
-function descargarPDF(){
-  const data = filtrados();
-  if(data.length === 0){ mostrarMsg("No hay registros que exportar al reporte.", "err"); return; }
-  const tarifa = tarifaActual();
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const marginX = 40;
-  let y = 50;
-
-  const totEx = data.reduce((s,r)=>s+r.extra,0);
-  const totFa = data.reduce((s,r)=>s+r.faltantes,0);
-  const pago = calcularPago(data, tarifa);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(21,36,32);
-  doc.text("Reporte de horas extra", marginX, y);
-  y += 20;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(90,100,96);
-  const q = document.getElementById("q-nombre").value.trim();
-  const desde = document.getElementById("q-desde").value;
-  const hasta = document.getElementById("q-hasta").value;
-  const filtroTxt = [
-    q ? `Nombre: ${q}` : null,
-    desde ? `Desde: ${desde}` : null,
-    hasta ? `Hasta: ${hasta}` : null
-  ].filter(Boolean).join("   ·   ") || "Sin filtros (todos los registros)";
-  doc.text(`Generado: ${new Date().toLocaleString("es-ES")}`, marginX, y); y += 14;
-  doc.text(filtroTxt, marginX, y); y += 14;
-  if(tarifa > 0){ doc.text(`Tarifa por hora extra: ${fmtDinero(tarifa)}`, marginX, y); y += 14; }
-  y += 8;
-
-  // Tarjetas resumen
-  const cardW = (595 - marginX*2 - 30) / 4;
-  const cards = [
-    {label:"Horas extra", val: fmt(totEx), color:[185,117,15]},
-    {label:"Salidas antes", val: fmt(totFa), color:[178,59,42]},
-    {label:"Horas a pagar", val: fmt(pago.horasPagar), color:[19,98,81]},
-    {label:"Total a pagar", val: tarifa>0 ? fmtDinero(pago.totalPagar) : "—", color:[29,122,69]}
-  ];
-  cards.forEach((c,i)=>{
-    const x = marginX + i*(cardW+10);
-    doc.setDrawColor(220,228,224);
-    doc.roundedRect(x, y, cardW, 54, 6, 6, "S");
-    doc.setFontSize(7.5);
-    doc.setTextColor(c.color[0],c.color[1],c.color[2]);
-    doc.text(c.label.toUpperCase(), x+8, y+16);
-    doc.setFontSize(13);
-    doc.setFont("helvetica","bold");
-    doc.text(String(c.val), x+8, y+38);
-    doc.setFont("helvetica","normal");
-  });
-  y += 54 + 26;
-
-  // Detalle por persona: quien, cuantas horas, y cuanto se le paga
-  const porPersona = {};
-  for(const r of data){
-    const k = r.nombre.toLowerCase();
-    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, fa:0, dias:0, trab:0};
-    porPersona[k].ex += r.extra; porPersona[k].fa += r.faltantes;
-    porPersona[k].dias += 1; porPersona[k].trab += r.trab; porPersona[k].rol = r.rol;
+    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, an:0, trab:0, dias:0};
+    porPersona[k].ex += r.extra; porPersona[k].an += r.antes;
+    porPersona[k].trab += r.trab; porPersona[k].dias += 1; porPersona[k].rol = r.rol;
   }
   const personas = Object.values(porPersona).sort((a,b)=>b.ex-a.ex);
-  const totHorasPagar = personas.reduce((s,p)=>s+Math.max(0,p.ex-p.fa),0);
-
-  doc.setFontSize(12); doc.setTextColor(21,36,32); doc.setFont("helvetica","bold");
-  doc.text("Detalle por persona", marginX, y);
-  const bodyPersonas = personas.map(p=>{
-    const hp = Math.max(0, p.ex - p.fa);
-    return [
-      p.nombre, ROLES[p.rol].label, p.dias, fmt(p.trab),
-      p.ex>0 ? fmt(p.ex) : "—",
-      p.fa>0 ? fmt(p.fa) : "—",
-      fmt(hp),
-      tarifa>0 ? fmtDinero(hp*tarifa) : "—"
-    ];
-  });
-  bodyPersonas.push([
-    {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "", "",
-    {content:fmt(totEx), styles:{fontStyle:"bold"}},
-    {content:fmt(totFa), styles:{fontStyle:"bold"}},
-    {content:fmt(totHorasPagar), styles:{fontStyle:"bold"}},
-    {content: tarifa>0 ? fmtDinero(totHorasPagar*tarifa) : "—", styles:{fontStyle:"bold", textColor:[19,98,81]}}
-  ]);
-  doc.autoTable({
-    startY: y+10, margin:{left:marginX,right:marginX},
-    head: [["Nombre","Posición","Días","Horas trabajadas","Horas extra","Se fue antes","Horas a pagar","A pagar ($)"]],
-    body: bodyPersonas,
-    styles:{fontSize:8.5, cellPadding:5},
-    headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
-  });
-  y = doc.lastAutoTable.finalY + 18;
-
-  // Bloque destacado con el total a pagar
-  if(y > 720){ doc.addPage(); y = 50; }
-  doc.setFillColor(226,239,234);
-  doc.roundedRect(marginX, y, 595 - marginX*2, 44, 6, 6, "F");
-  doc.setFontSize(11);
-  doc.setTextColor(19,98,81);
-  doc.setFont("helvetica","bold");
-  doc.text(
-    tarifa > 0
-      ? `TOTAL A PAGAR: ${fmtDinero(totHorasPagar*tarifa)}  (${fmt(totHorasPagar)} a ${fmtDinero(tarifa)} por hora)`
-      : `TOTAL DE HORAS A PAGAR: ${fmt(totHorasPagar)}  (indica una tarifa para calcular el monto)`,
-    marginX + 14, y + 27);
-  doc.setFont("helvetica","normal");
-  y += 44 + 24;
-
-  // Por posicion
   const porRol = {};
-  for(const r of data){
-    if(!porRol[r.rol]) porRol[r.rol] = {ex:0, fa:0, pers:new Set()};
-    porRol[r.rol].ex += r.extra; porRol[r.rol].fa += r.faltantes;
-    if(r.extra>0) porRol[r.rol].pers.add(r.nombre);
+  for(const p of personas){
+    if(!porRol[p.rol]) porRol[p.rol] = {personas:0, conExtra:0, seFueAntes:0, ex:0, an:0};
+    porRol[p.rol].personas += 1;
+    if(p.ex > 0) porRol[p.rol].conExtra += 1;
+    if(p.an > 0) porRol[p.rol].seFueAntes += 1;
+    porRol[p.rol].ex += p.ex; porRol[p.rol].an += p.an;
   }
-  if(y > 680){ doc.addPage(); y = 50; }
-  doc.setFontSize(12); doc.setTextColor(21,36,32); doc.setFont("helvetica","bold");
-  doc.text("Horas extra y salidas por posición", marginX, y);
-  doc.autoTable({
-    startY: y+10, margin:{left:marginX,right:marginX},
-    head: [["Posición","Personas con extra","Horas extra","Salidas antes","Balance"]],
-    body: Object.keys(porRol).map(rol=>{
-      const v = porRol[rol]; const bal = v.ex - v.fa;
-      return [ROLES[rol].label, v.pers.size, fmt(v.ex), fmt(v.fa), (bal>0?"+":"")+fmt(bal)];
-    }),
-    styles:{fontSize:9, cellPadding:6}, headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
-  });
-  y = doc.lastAutoTable.finalY + 24;
-
-  // Registros dia a dia
-  const orden = data.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
-  if(y > 650){ doc.addPage(); y = 50; }
-  doc.setFontSize(12); doc.setFont("helvetica","bold");
-  doc.text("Registros día a día", marginX, y);
-  doc.autoTable({
-    startY: y+10, margin:{left:marginX,right:marginX},
-    head: [["Fecha","Nombre","Posición","Trabajadas","Programadas","Extra","Se fue antes"]],
-    body: orden.map(r=>[r.fecha, r.nombre, ROLES[r.rol].label, fmt(r.trab), fmt(r.prog), r.extra>0?fmt(r.extra):"—", r.faltantes>0?fmt(r.faltantes):"—"]),
-    styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
-  });
-
-  doc.save(`reporte-horas-extra-${new Date().toISOString().slice(0,10)}.pdf`);
+  const horasPagar = personas.reduce((s,p)=>s+Math.max(0, p.ex - p.an), 0);
+  return {
+    personas, porRol,
+    totalPersonas: personas.length,
+    conExtra: personas.filter(p=>p.ex>0).length,
+    seFueronAntes: personas.filter(p=>p.an>0).length,
+    totEx: personas.reduce((s,p)=>s+p.ex,0),
+    totAn: personas.reduce((s,p)=>s+p.an,0),
+    horasPagar
+  };
 }
 
-// Fecha de hoy por defecto
-document.getElementById("f-fecha").value = new Date().toISOString().slice(0,10);
-cargar();
+function pintar(){
+  if(registros.length === 0){
+    document.getElementById("tarjetas").innerHTML = "";
+    document.getElementById("tabla-posiciones").innerHTML = "";
+    document.getElementById("tabla-personas").innerHTML = "";
+    document.getElementById("tabla-registros").innerHTML = "";
+    pintarTexto();
+    return;
+  }
+  const R = resumen();
+  const t = tarifa();
+
+  document.getElementById("tarjetas").innerHTML = `
+    <div class="tarjeta t-ambar">
+      <div class="etq">Con horas extra</div>
+      <div class="num">${R.conExtra}</div>
+      <div class="det">${R.conExtra===1?"persona":"personas"} · ${fmt(R.totEx)} en total</div>
+    </div>
+    <div class="tarjeta t-rojo">
+      <div class="etq">Se fueron antes</div>
+      <div class="num">${R.seFueronAntes}</div>
+      <div class="det">${R.seFueronAntes===1?"persona":"personas"} · ${fmt(R.totAn)} en total</div>
+    </div>
+    <div class="tarjeta t-verde">
+      <div class="etq">Horas por pagar</div>
+      <div class="num">${fmt(R.horasPagar)}</div>
+      <div class="det">Extras menos salidas antes, por persona</div>
+    </div>
+    <div class="tarjeta t-verde">
+      <div class="etq">Total a pagar</div>
+      <div class="num">${t>0 ? fmtDinero(R.horasPagar*t) : "—"}</div>
+      <div class="det">${t>0 ? "a " + fmtDinero(t) + " la hora" : "Escribe la tarifa arriba"}</div>
+    </div>`;
+
+  const roles = Object.keys(R.porRol);
+  document.getElementById("tabla-posiciones").innerHTML = `
+    <table><thead><tr>
+      <th>Posición</th><th>Personas</th><th>Con extra</th><th>Se fueron antes</th><th>Horas extra</th><th>Horas antes</th>
+    </tr></thead><tbody>
+    ${roles.map(rol => {
+      const v = R.porRol[rol];
+      return `<tr>
+        <td><span class="chip">${POSICIONES[rol].label}</span></td>
+        <td>${v.personas}</td>
+        <td class="${v.conExtra>0?"n-ambar":"apagado"}">${v.conExtra}</td>
+        <td class="${v.seFueAntes>0?"n-rojo":"apagado"}">${v.seFueAntes}</td>
+        <td class="${v.ex>0?"n-ambar":"apagado"}">${fmt(v.ex)}</td>
+        <td class="${v.an>0?"n-rojo":"apagado"}">${fmt(v.an)}</td>
+      </tr>`;
+    }).join("")}
+    <tr class="fila-total">
+      <td>TOTAL</td><td>${R.totalPersonas}</td>
+      <td>${R.conExtra}</td><td>${R.seFueronAntes}</td>
+      <td>${fmt(R.totEx)}</td><td>${fmt(R.totAn)}</td>
+    </tr>
+    </tbody></table>`;
+
+  document.getElementById("tabla-personas").innerHTML = `
+    <table><thead><tr>
+      <th>Nombre</th><th>Posición</th><th>Días</th><th>Trabajadas</th><th>Extra</th><th>Se fue antes</th><th>Horas a pagar</th><th>A pagar ($)</th>
+    </tr></thead><tbody>
+    ${R.personas.map(p => {
+      const hp = Math.max(0, p.ex - p.an);
+      return `<tr>
+        <td style="font-weight:600">${esc(p.nombre)}</td>
+        <td><span class="chip">${POSICIONES[p.rol].label}</span></td>
+        <td>${p.dias}</td>
+        <td>${fmt(p.trab)}</td>
+        <td class="${p.ex>0?"n-ambar":"apagado"}">${p.ex>0?fmt(p.ex):"—"}</td>
+        <td class="${p.an>0?"n-rojo":"apagado"}">${p.an>0?fmt(p.an):"—"}</td>
+        <td class="${hp>0?"n-verde":"apagado"}">${fmt(hp)}</td>
+        <td style="font-weight:600">${t>0 ? fmtDinero(hp*t) : "—"}</td>
+      </tr>`;
+    }).join("")}
+    <tr class="fila-total">
+      <td>TOTAL</td><td></td><td></td><td></td>
+      <td>${fmt(R.totEx)}</td><td>${fmt(R.totAn)}</td>
+      <td>${fmt(R.horasPagar)}</td>
+      <td>${t>0 ? fmtDinero(R.horasPagar*t) : "—"}</td>
+    </tr>
+    </tbody></table>`;
+
+  const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
+  document.getElementById("tabla-registros").innerHTML = `
+    <table><thead><tr>
+      <th>Fecha</th><th>Nombre</th><th>Posición</th><th>Trabajadas</th><th>Programadas</th><th>Extra</th><th>Se fue antes</th>
+    </tr></thead><tbody>
+    ${orden.map(r => `<tr>
+      <td>${r.fecha}</td><td>${esc(r.nombre)}</td>
+      <td><span class="chip">${POSICIONES[r.rol].label}</span></td>
+      <td>${fmt(r.trab)}</td><td>${fmt(r.prog)}</td>
+      <td class="${r.extra>0?"n-ambar":"apagado"}">${r.extra>0?fmt(r.extra):"—"}</td>
+      <td class="${r.antes>0?"n-rojo":"apagado"}">${r.antes>0?fmt(r.antes):"—"}</td>
+    </tr>`).join("")}
+    </tbody></table>`;
+
+  pintarTexto();
+}
+
+function pintarTexto(){
+  document.getElementById("texto-completo").innerHTML = paginasTexto.map(pg => `
+    <div style="font-weight:600;font-size:13.5px;margin-top:10px">Página ${pg.numero} · ${pg.lineas.length} líneas</div>
+    <div class="texto-pdf">${pg.lineas.map(esc).join("\n") || "(sin texto extraíble — puede ser una imagen escaneada)"}</div>
+  `).join("");
+}
+
+function reiniciar(){
+  registros = []; paginasTexto = []; nombreArchivo = "";
+  document.getElementById("resultados").style.display = "none";
+  mensaje("");
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+
+/* ---------- Reporte PDF ---------- */
+function descargarReporte(){
+  if(registros.length === 0){ mensaje("No hay datos que exportar.", "err"); return; }
+  const R = resumen();
+  const t = tarifa();
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"pt", format:"a4" });
+  const mx = 40;
+  let y = 50;
+
+  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(28,36,34);
+  doc.text("Reporte de horas del evento", mx, y); y += 20;
+  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(90,100,96);
+  doc.text(`Archivo: ${nombreArchivo}`, mx, y); y += 14;
+  doc.text(`Generado: ${new Date().toLocaleString("es-ES")}`, mx, y); y += 14;
+  if(t > 0){ doc.text(`Tarifa por hora: ${fmtDinero(t)}`, mx, y); y += 14; }
+  y += 8;
+
+  const cardW = (595 - mx*2 - 30) / 4;
+  const tarjetas = [
+    {etq:"CON HORAS EXTRA", val:`${R.conExtra} pers.`, sub:fmt(R.totEx), color:[185,116,22]},
+    {etq:"SE FUERON ANTES", val:`${R.seFueronAntes} pers.`, sub:fmt(R.totAn), color:[178,59,42]},
+    {etq:"HORAS POR PAGAR", val:fmt(R.horasPagar), sub:"neto por persona", color:[22,96,73]},
+    {etq:"TOTAL A PAGAR", val:t>0?fmtDinero(R.horasPagar*t):"—", sub:t>0?`a ${fmtDinero(t)}/h`:"sin tarifa", color:[22,96,73]}
+  ];
+  tarjetas.forEach((c,i)=>{
+    const x = mx + i*(cardW+10);
+    doc.setDrawColor(220,228,224);
+    doc.roundedRect(x, y, cardW, 60, 6, 6, "S");
+    doc.setFontSize(7); doc.setTextColor(...c.color);
+    doc.text(c.etq, x+8, y+15);
+    doc.setFontSize(13); doc.setFont("helvetica","bold");
+    doc.text(String(c.val), x+8, y+35);
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(110,120,116);
+    doc.text(String(c.sub), x+8, y+50);
+  });
+  y += 60 + 24;
+
+  // Por posición
+  doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
+  doc.text("Por posición", mx, y);
+  const filasRol = Object.keys(R.porRol).map(rol=>{
+    const v = R.porRol[rol];
+    return [POSICIONES[rol].label, v.personas, v.conExtra, v.seFueAntes, fmt(v.ex), fmt(v.an)];
+  });
+  filasRol.push([
+    {content:"TOTAL", styles:{fontStyle:"bold"}},
+    {content:R.totalPersonas, styles:{fontStyle:"bold"}},
+    {content:R.conExtra, styles:{fontStyle:"bold"}},
+    {content:R.seFueronAntes, styles:{fontStyle:"bold"}},
+    {content:fmt(R.totEx), styles:{fontStyle:"bold"}},
+    {content:fmt(R.totAn), styles:{fontStyle:"bold"}}
+  ]);
+  doc.autoTable({
+    startY:y+10, margin:{left:mx,right:mx},
+    head:[["Posición","Personas","Con extra","Se fueron antes","Horas extra","Horas antes"]],
+    body:filasRol,
+    styles:{fontSize:9, cellPadding:6}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
+  });
+  y = doc.lastAutoTable.finalY + 22;
+
+  // Por persona
+  if(y > 650){ doc.addPage(); y = 50; }
+  doc.setFontSize(12); doc.setFont("helvetica","bold");
+  doc.text("Por persona", mx, y);
+  const filasPers = R.personas.map(p=>{
+    const hp = Math.max(0, p.ex - p.an);
+    return [p.nombre, POSICIONES[p.rol].label, p.dias, fmt(p.trab),
+      p.ex>0?fmt(p.ex):"—", p.an>0?fmt(p.an):"—", fmt(hp), t>0?fmtDinero(hp*t):"—"];
+  });
+  filasPers.push([
+    {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "", "",
+    {content:fmt(R.totEx), styles:{fontStyle:"bold"}},
+    {content:fmt(R.totAn), styles:{fontStyle:"bold"}},
+    {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}},
+    {content:t>0?fmtDinero(R.horasPagar*t):"—", styles:{fontStyle:"bold", textColor:[22,96,73]}}
+  ]);
+  doc.autoTable({
+    startY:y+10, margin:{left:mx,right:mx},
+    head:[["Nombre","Posición","Días","Trabajadas","Extra","Se fue antes","Horas a pagar","A pagar ($)"]],
+    body:filasPers,
+    styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
+  });
+  y = doc.lastAutoTable.finalY + 16;
+
+  // Bloque total
+  if(y > 720){ doc.addPage(); y = 50; }
+  doc.setFillColor(226,239,234);
+  doc.roundedRect(mx, y, 595 - mx*2, 42, 6, 6, "F");
+  doc.setFontSize(11); doc.setTextColor(22,96,73); doc.setFont("helvetica","bold");
+  doc.text(
+    t > 0
+      ? `TOTAL A PAGAR: ${fmtDinero(R.horasPagar*t)}   (${fmt(R.horasPagar)} a ${fmtDinero(t)} por hora)`
+      : `TOTAL DE HORAS POR PAGAR: ${fmt(R.horasPagar)}`,
+    mx + 14, y + 26);
+  doc.setFont("helvetica","normal");
+  y += 42 + 22;
+
+  // Registros día a día
+  const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
+  if(y > 650){ doc.addPage(); y = 50; }
+  doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
+  doc.text("Registros día a día", mx, y);
+  doc.autoTable({
+    startY:y+10, margin:{left:mx,right:mx},
+    head:[["Fecha","Nombre","Posición","Trabajadas","Programadas","Extra","Se fue antes"]],
+    body:orden.map(r=>[r.fecha, r.nombre, POSICIONES[r.rol].label, fmt(r.trab), fmt(r.prog),
+      r.extra>0?fmt(r.extra):"—", r.antes>0?fmt(r.antes):"—"]),
+    styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
+  });
+
+  doc.save(`reporte-evento-${new Date().toISOString().slice(0,10)}.pdf`);
+}
 </script>
 </body>
 </html>
