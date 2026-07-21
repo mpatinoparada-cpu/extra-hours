@@ -124,6 +124,7 @@
       <div><label for="q-nombre">Filtrar por nombre</label><input type="text" id="q-nombre" placeholder="Todos" oninput="render()"></div>
       <div><label for="q-desde">Desde</label><input type="date" id="q-desde" onchange="render()"></div>
       <div><label for="q-hasta">Hasta</label><input type="date" id="q-hasta" onchange="render()"></div>
+      <div><label for="q-tarifa">Tarifa por hora ($)</label><input type="number" id="q-tarifa" min="0" step="0.5" placeholder="Ej. 12.50" oninput="render()"></div>
       <div><button class="btn secondary" onclick="limpiarFiltros()">Quitar filtros</button></div>
     </div>
 
@@ -261,13 +262,33 @@ function chip(rol){
   return `<span class="chip" style="background:${m.color}1A;color:${m.color}">${m.label}</span>`;
 }
 
+function tarifaActual(){
+  return parseFloat(document.getElementById("q-tarifa").value) || 0;
+}
+
+// Horas a pagar: por persona, extras menos salidas antes (no baja de 0)
+function calcularPago(data, tarifa){
+  const porPersona = {};
+  for(const r of data){
+    const k = r.nombre.toLowerCase();
+    if(!porPersona[k]) porPersona[k] = {ex:0, fa:0};
+    porPersona[k].ex += r.extra;
+    porPersona[k].fa += r.faltantes;
+  }
+  let horasPagar = 0;
+  for(const k in porPersona) horasPagar += Math.max(0, porPersona[k].ex - porPersona[k].fa);
+  return {horasPagar, totalPagar: horasPagar * tarifa};
+}
+
 function render(){
   const data = filtrados();
+  const tarifa = tarifaActual();
   const totEx = data.reduce((s,r)=>s+r.extra,0);
   const totFa = data.reduce((s,r)=>s+r.faltantes,0);
   const pendiente = Math.max(0, totEx - totFa);
   const persEx = new Set(data.filter(r=>r.extra>0).map(r=>r.nombre)).size;
   const persFa = new Set(data.filter(r=>r.faltantes>0).map(r=>r.nombre)).size;
+  const pago = calcularPago(data, tarifa);
 
   // Tarjetas
   document.getElementById("cards").innerHTML = `
@@ -282,11 +303,14 @@ function render(){
       <div class="det">${persFa} ${persFa===1?"persona":"personas"}</div>
     </div>
     <div class="card" style="background:${pendiente>0?"var(--def-soft)":"var(--ok-soft)"}">
-      <div class="lbl" style="color:${pendiente>0?"var(--def)":"var(--ok)"}">Pendiente de pagar</div>
-      <div class="val" style="color:${pendiente>0?"var(--def)":"var(--ok)"}">${fmt(pendiente)}</div>
-      <div class="det">${pendiente>0
-        ? "Horas extra que no se compensan con las salidas anticipadas"
-        : "Todo compensado" + (totFa-totEx>0 ? " · sobran " + fmt(totFa-totEx) + " de margen" : "")}</div>
+      <div class="lbl" style="color:${pendiente>0?"var(--def)":"var(--ok)"}">Horas a pagar</div>
+      <div class="val" style="color:${pendiente>0?"var(--def)":"var(--ok)"}">${fmt(pago.horasPagar)}</div>
+      <div class="det">Extras menos salidas antes, por persona</div>
+    </div>
+    <div class="card" style="background:var(--brand-soft)">
+      <div class="lbl" style="color:var(--brand)">Total a pagar ($)</div>
+      <div class="val" style="color:var(--brand)">${tarifa>0 ? fmtDinero(pago.totalPagar) : "—"}</div>
+      <div class="det">${tarifa>0 ? "a " + fmtDinero(tarifa) + " la hora" : "Indica la tarifa por hora arriba"}</div>
     </div>`;
 
   // Por posición
@@ -320,16 +344,27 @@ function render(){
     porPersona[k].rol = r.rol;
   }
   const personas = Object.values(porPersona).sort((a,b)=>b.ex-a.ex);
+  const totPagarPersonas = personas.reduce((s,p)=>s+Math.max(0,p.ex-p.fa),0);
   document.getElementById("por-persona").innerHTML = personas.length === 0
     ? `<div class="empty">Sin datos que mostrar.</div>`
-    : `<table><thead><tr><th>Nombre</th><th>Posición</th><th>Días registrados</th><th>Horas extra</th><th>Salidas antes</th><th>Balance</th></tr></thead><tbody>` +
+    : `<table><thead><tr><th>Nombre</th><th>Posición</th><th>Días registrados</th><th>Horas extra</th><th>Salidas antes</th><th>Balance</th><th>Horas a pagar</th><th>A pagar ($)</th></tr></thead><tbody>` +
       personas.map(p => {
         const bal = p.ex - p.fa;
+        const hp = Math.max(0, bal);
         return `<tr><td style="font-weight:600">${esc(p.nombre)}</td><td>${chip(p.rol)}</td><td>${p.dias}</td>
           <td class="${p.ex>0?"num-ot":"muted"}">${fmt(p.ex)}</td>
           <td class="${p.fa>0?"num-def":"muted"}">${fmt(p.fa)}</td>
-          <td class="${bal>0?"num-ot":bal<0?"num-def":"muted"}">${bal>0?"+":""}${fmt(bal)}</td></tr>`;
-      }).join("") + `</tbody></table>`;
+          <td class="${bal>0?"num-ot":bal<0?"num-def":"muted"}">${bal>0?"+":""}${fmt(bal)}</td>
+          <td class="${hp>0?"num-ot":"muted"}">${fmt(hp)}</td>
+          <td style="font-weight:600">${tarifa>0 ? fmtDinero(hp*tarifa) : "—"}</td></tr>`;
+      }).join("") +
+      `<tr style="background:var(--brand-soft)"><td style="font-weight:700">TOTAL</td><td></td><td></td>
+        <td class="num-ot" style="font-weight:700">${fmt(totEx)}</td>
+        <td class="num-def" style="font-weight:700">${fmt(totFa)}</td>
+        <td></td>
+        <td class="num-ot" style="font-weight:700">${fmt(totPagarPersonas)}</td>
+        <td style="font-weight:700;color:var(--brand)">${tarifa>0 ? fmtDinero(totPagarPersonas*tarifa) : "—"}</td></tr>` +
+      `</tbody></table>`;
 
   // Registros individuales
   const orden = data.slice().sort((a,b)=> b.fecha.localeCompare(a.fecha));
@@ -821,6 +856,7 @@ async function confirmarImportPDF(){
 function descargarPDF(){
   const data = filtrados();
   if(data.length === 0){ mostrarMsg("No hay registros que exportar al reporte.", "err"); return; }
+  const tarifa = tarifaActual();
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -829,10 +865,11 @@ function descargarPDF(){
 
   const totEx = data.reduce((s,r)=>s+r.extra,0);
   const totFa = data.reduce((s,r)=>s+r.faltantes,0);
-  const pendiente = Math.max(0, totEx - totFa);
+  const pago = calcularPago(data, tarifa);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
+  doc.setTextColor(21,36,32);
   doc.text("Reporte de horas extra", marginX, y);
   y += 20;
   doc.setFont("helvetica", "normal");
@@ -847,28 +884,85 @@ function descargarPDF(){
     hasta ? `Hasta: ${hasta}` : null
   ].filter(Boolean).join("   ·   ") || "Sin filtros (todos los registros)";
   doc.text(`Generado: ${new Date().toLocaleString("es-ES")}`, marginX, y); y += 14;
-  doc.text(filtroTxt, marginX, y); y += 22;
+  doc.text(filtroTxt, marginX, y); y += 14;
+  if(tarifa > 0){ doc.text(`Tarifa por hora extra: ${fmtDinero(tarifa)}`, marginX, y); y += 14; }
+  y += 8;
 
   // Tarjetas resumen
-  const cardW = (595 - marginX*2 - 20) / 3;
+  const cardW = (595 - marginX*2 - 30) / 4;
   const cards = [
-    {label:"Horas extra totales", val: fmt(totEx), color:[185,117,15]},
-    {label:"Salidas antes (horas)", val: fmt(totFa), color:[178,59,42]},
-    {label:"Pendiente de pagar", val: fmt(pendiente), color: pendiente>0 ? [178,59,42] : [29,122,69]}
+    {label:"Horas extra", val: fmt(totEx), color:[185,117,15]},
+    {label:"Salidas antes", val: fmt(totFa), color:[178,59,42]},
+    {label:"Horas a pagar", val: fmt(pago.horasPagar), color:[19,98,81]},
+    {label:"Total a pagar", val: tarifa>0 ? fmtDinero(pago.totalPagar) : "—", color:[29,122,69]}
   ];
   cards.forEach((c,i)=>{
     const x = marginX + i*(cardW+10);
     doc.setDrawColor(220,228,224);
     doc.roundedRect(x, y, cardW, 54, 6, 6, "S");
-    doc.setFontSize(8.5);
+    doc.setFontSize(7.5);
     doc.setTextColor(c.color[0],c.color[1],c.color[2]);
-    doc.text(c.label.toUpperCase(), x+10, y+18);
-    doc.setFontSize(15);
+    doc.text(c.label.toUpperCase(), x+8, y+16);
+    doc.setFontSize(13);
     doc.setFont("helvetica","bold");
-    doc.text(c.val, x+10, y+40);
+    doc.text(String(c.val), x+8, y+38);
     doc.setFont("helvetica","normal");
   });
   y += 54 + 26;
+
+  // Detalle por persona: quien, cuantas horas, y cuanto se le paga
+  const porPersona = {};
+  for(const r of data){
+    const k = r.nombre.toLowerCase();
+    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, fa:0, dias:0, trab:0};
+    porPersona[k].ex += r.extra; porPersona[k].fa += r.faltantes;
+    porPersona[k].dias += 1; porPersona[k].trab += r.trab; porPersona[k].rol = r.rol;
+  }
+  const personas = Object.values(porPersona).sort((a,b)=>b.ex-a.ex);
+  const totHorasPagar = personas.reduce((s,p)=>s+Math.max(0,p.ex-p.fa),0);
+
+  doc.setFontSize(12); doc.setTextColor(21,36,32); doc.setFont("helvetica","bold");
+  doc.text("Detalle por persona", marginX, y);
+  const bodyPersonas = personas.map(p=>{
+    const hp = Math.max(0, p.ex - p.fa);
+    return [
+      p.nombre, ROLES[p.rol].label, p.dias, fmt(p.trab),
+      p.ex>0 ? fmt(p.ex) : "—",
+      p.fa>0 ? fmt(p.fa) : "—",
+      fmt(hp),
+      tarifa>0 ? fmtDinero(hp*tarifa) : "—"
+    ];
+  });
+  bodyPersonas.push([
+    {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "", "",
+    {content:fmt(totEx), styles:{fontStyle:"bold"}},
+    {content:fmt(totFa), styles:{fontStyle:"bold"}},
+    {content:fmt(totHorasPagar), styles:{fontStyle:"bold"}},
+    {content: tarifa>0 ? fmtDinero(totHorasPagar*tarifa) : "—", styles:{fontStyle:"bold", textColor:[19,98,81]}}
+  ]);
+  doc.autoTable({
+    startY: y+10, margin:{left:marginX,right:marginX},
+    head: [["Nombre","Posición","Días","Horas trabajadas","Horas extra","Se fue antes","Horas a pagar","A pagar ($)"]],
+    body: bodyPersonas,
+    styles:{fontSize:8.5, cellPadding:5},
+    headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
+  });
+  y = doc.lastAutoTable.finalY + 18;
+
+  // Bloque destacado con el total a pagar
+  if(y > 720){ doc.addPage(); y = 50; }
+  doc.setFillColor(226,239,234);
+  doc.roundedRect(marginX, y, 595 - marginX*2, 44, 6, 6, "F");
+  doc.setFontSize(11);
+  doc.setTextColor(19,98,81);
+  doc.setFont("helvetica","bold");
+  doc.text(
+    tarifa > 0
+      ? `TOTAL A PAGAR: ${fmtDinero(totHorasPagar*tarifa)}  (${fmt(totHorasPagar)} a ${fmtDinero(tarifa)} por hora)`
+      : `TOTAL DE HORAS A PAGAR: ${fmt(totHorasPagar)}  (indica una tarifa para calcular el monto)`,
+    marginX + 14, y + 27);
+  doc.setFont("helvetica","normal");
+  y += 44 + 24;
 
   // Por posicion
   const porRol = {};
@@ -877,6 +971,7 @@ function descargarPDF(){
     porRol[r.rol].ex += r.extra; porRol[r.rol].fa += r.faltantes;
     if(r.extra>0) porRol[r.rol].pers.add(r.nombre);
   }
+  if(y > 680){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setTextColor(21,36,32); doc.setFont("helvetica","bold");
   doc.text("Horas extra y salidas por posición", marginX, y);
   doc.autoTable({
@@ -890,37 +985,15 @@ function descargarPDF(){
   });
   y = doc.lastAutoTable.finalY + 24;
 
-  // Por persona
-  const porPersona = {};
-  for(const r of data){
-    const k = r.nombre.toLowerCase();
-    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, fa:0, dias:0};
-    porPersona[k].ex += r.extra; porPersona[k].fa += r.faltantes; porPersona[k].dias += 1; porPersona[k].rol = r.rol;
-  }
-  const personas = Object.values(porPersona).sort((a,b)=>b.ex-a.ex);
-  if(y > 700){ doc.addPage(); y = 50; }
-  doc.setFontSize(12); doc.setFont("helvetica","bold");
-  doc.text("Acumulado por persona", marginX, y);
-  doc.autoTable({
-    startY: y+10, margin:{left:marginX,right:marginX},
-    head: [["Nombre","Posición","Días","Horas extra","Salidas antes","Balance"]],
-    body: personas.map(p=>{
-      const bal = p.ex - p.fa;
-      return [p.nombre, ROLES[p.rol].label, p.dias, fmt(p.ex), fmt(p.fa), (bal>0?"+":"")+fmt(bal)];
-    }),
-    styles:{fontSize:9, cellPadding:6}, headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
-  });
-  y = doc.lastAutoTable.finalY + 24;
-
-  // Registros individuales
-  const orden = data.slice().sort((a,b)=> b.fecha.localeCompare(a.fecha));
+  // Registros dia a dia
+  const orden = data.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
   if(y > 650){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setFont("helvetica","bold");
-  doc.text("Registros", marginX, y);
+  doc.text("Registros día a día", marginX, y);
   doc.autoTable({
     startY: y+10, margin:{left:marginX,right:marginX},
-    head: [["Fecha","Nombre","Posición","Trabajadas","Programadas","Extra","Salió antes"]],
-    body: orden.map(r=>[r.fecha, r.nombre, ROLES[r.rol].label, fmt(r.trab), fmt(r.prog), fmt(r.extra), fmt(r.faltantes)]),
+    head: [["Fecha","Nombre","Posición","Trabajadas","Programadas","Extra","Se fue antes"]],
+    body: orden.map(r=>[r.fecha, r.nombre, ROLES[r.rol].label, fmt(r.trab), fmt(r.prog), r.extra>0?fmt(r.extra):"—", r.faltantes>0?fmt(r.faltantes):"—"]),
     styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
   });
 
