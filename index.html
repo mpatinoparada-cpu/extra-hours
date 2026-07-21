@@ -53,6 +53,11 @@
   .empty{font-size:14px;color:var(--ink-soft);padding:14px 4px}
   .table-scroll{overflow:auto}
   .row-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+  .dropzone{border:2px dashed var(--brand);background:var(--brand-soft);text-align:center;padding:34px 20px;cursor:pointer;transition:background .15s,border-color .15s}
+  .dropzone.drag{background:#D2E8DF;border-color:#0C4A3D}
+  .dropzone .dz-icon{font-size:34px;margin-bottom:8px}
+  .dropzone .dz-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:21px;color:var(--brand)}
+  .dropzone .dz-sub{font-size:14px;color:var(--ink-soft);margin-top:5px;max-width:520px;margin-left:auto;margin-right:auto}
   .preview-wrap{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
   .preview-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px}
   .preview-head .cnt{font-size:13.5px;color:var(--ink-soft)}
@@ -74,8 +79,23 @@
 
 <main class="wrap">
 
+  <!-- Subir PDF -->
+  <h2>Subir PDF con las horas</h2>
+  <div class="panel dropzone" id="dropzone"
+       ondragover="event.preventDefault();this.classList.add('drag')"
+       ondragleave="this.classList.remove('drag')"
+       ondrop="event.preventDefault();this.classList.remove('drag');if(event.dataTransfer.files[0])importarPDF(event.dataTransfer.files[0])"
+       onclick="document.getElementById('pdf-input-top').click()">
+    <div class="dz-icon">📄</div>
+    <div class="dz-title" id="btn-pdf-import">Arrastra tu PDF aquí o haz clic para elegirlo</div>
+    <div class="dz-sub">Se leerán las horas trabajadas de cada persona para calcular extras, salidas antes y el total a pagar</div>
+    <input type="file" id="pdf-input-top" accept=".pdf,application/pdf" style="display:none" onchange="importarPDF(this.files[0]);this.value=''">
+  </div>
+  <div class="msg" id="pdf-msg"></div>
+  <div class="panel preview-wrap" id="pdf-preview" style="display:none;margin-top:12px;border-top:none;padding-top:18px"></div>
+
   <!-- Formulario -->
-  <h2>Añadir registro</h2>
+  <h2>Añadir registro manual</h2>
   <div class="panel">
     <div class="grid form-grid">
       <div><label for="f-fecha">Fecha</label><input type="date" id="f-fecha"></div>
@@ -123,8 +143,7 @@
   <div class="panel table-scroll">
     <div id="tabla-registros"></div>
     <div class="row-actions">
-      <button class="btn secondary" id="btn-pdf-import" onclick="document.getElementById('pdf-input').click()">Importar PDF</button>
-      <input type="file" id="pdf-input" accept=".pdf,application/pdf" style="display:none" onchange="importarPDF(this.files[0])">
+      <button class="btn secondary" onclick="document.getElementById('pdf-input-top').click()">Importar PDF</button>
       <button class="btn secondary" onclick="document.getElementById('csv-input').click()">Importar CSV</button>
       <input type="file" id="csv-input" accept=".csv,text/csv" style="display:none" onchange="importarCSV(this.files[0])">
       <button class="btn secondary" onclick="exportarCSV()">Exportar CSV</button>
@@ -132,7 +151,6 @@
       <button class="btn danger" onclick="borrarTodo()">Borrar todos los datos</button>
     </div>
     <div class="msg" id="csv-msg"></div>
-    <div id="pdf-preview" class="preview-wrap" style="display:none"></div>
   </div>
 
 </main>
@@ -455,10 +473,15 @@ async function extraerLineasPDF(file){
 function normalizarFecha(txt){
   let m = txt.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
   if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
-  m = txt.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if(m) return `${m[3]}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;
-  m = txt.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
-  if(m) return `${m[3]}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;
+  m = txt.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+  if(m){
+    let a = parseInt(m[1]), b = parseInt(m[2]);
+    // Formato DD/MM por defecto (uso hispano); si el "mes" es > 12, es MM/DD
+    let dia = a, mes = b;
+    if(b > 12 && a <= 12){ dia = b; mes = a; }
+    if(mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+    return `${m[3]}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+  }
   return null;
 }
 
@@ -504,12 +527,20 @@ function parsearLineasAregistros(lineas){
   return detectadas;
 }
 
+function msgPDF(t, tipo){
+  const m = document.getElementById("pdf-msg");
+  m.textContent = t; m.className = "msg " + tipo;
+  clearTimeout(m._t); m._t = setTimeout(()=>{ m.className = "msg"; }, 6000);
+}
+
 async function importarPDF(file){
   if(!file) return;
-  const btn = document.getElementById("btn-pdf-import");
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Leyendo PDF…';
+  if(!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){
+    msgPDF("El archivo debe ser un PDF.", "err"); return;
+  }
+  const titulo = document.getElementById("btn-pdf-import");
+  const original = titulo.textContent;
+  titulo.innerHTML = '<span class="spinner"></span>Leyendo PDF…';
   try{
     const { lineas, paginas } = await extraerLineasPDF(file);
     const detectadas = parsearLineasAregistros(lineas);
@@ -517,15 +548,16 @@ async function importarPDF(file){
     pdfPaginasActuales = paginas;
     pdfArchivoActual = file.name;
     if(detectadas.length === 0){
-      msgCSV("No se detectaron registros de horas con fecha reconocible, pero abajo puedes ver todo el contenido leído del PDF.", "err");
+      msgPDF("No se detectaron registros con fecha reconocible. Abajo puedes ver todo el contenido leído del PDF.", "err");
+    } else {
+      msgPDF(detectadas.length + " registro(s) leídos de \"" + file.name + "\". Revisa el análisis abajo.", "ok");
     }
     mostrarPreviewPDF();
+    document.getElementById("pdf-preview").scrollIntoView({behavior:"smooth", block:"start"});
   }catch(e){
-    msgCSV("No se pudo leer el PDF: " + e.message, "err");
+    msgPDF("No se pudo leer el PDF: " + e.message, "err");
   }finally{
-    btn.disabled = false;
-    btn.textContent = original;
-    document.getElementById("pdf-input").value = "";
+    titulo.textContent = original;
   }
 }
 
