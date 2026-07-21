@@ -529,6 +529,165 @@ async function importarPDF(file){
   }
 }
 
+function analisisDesdeFilas(filas, tarifa){
+  const porPersona = {};
+  for(const r of filas){
+    const k = r.nombre.toLowerCase();
+    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, fa:0, dias:0};
+    const extra = Math.max(0, r.trab - r.prog);
+    const falt = Math.max(0, r.prog - r.trab);
+    porPersona[k].ex += extra;
+    porPersona[k].fa += falt;
+    porPersona[k].dias += 1;
+    porPersona[k].rol = r.rol;
+  }
+  const personas = Object.values(porPersona).map(p => {
+    p.balance = p.ex - p.fa;
+    p.pagar = Math.max(0, p.balance) * (tarifa || 0);
+    return p;
+  }).sort((a,b)=>b.ex-a.ex);
+  const totEx = personas.reduce((s,p)=>s+p.ex,0);
+  const totFa = personas.reduce((s,p)=>s+p.fa,0);
+  const horasPagar = personas.reduce((s,p)=>s+Math.max(0,p.balance),0);
+  const totalPagar = personas.reduce((s,p)=>s+p.pagar,0);
+  return {personas, totEx, totFa, horasPagar, totalPagar};
+}
+
+function fmtDinero(n){
+  return "$" + (Math.round(n*100)/100).toLocaleString("es-ES", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function renderAnalisisPDF(){
+  const tarifa = parseFloat(document.getElementById("pdf-tarifa")?.value) || 0;
+  const a = analisisDesdeFilas(filasDetectadasPDF, tarifa);
+  const cont = document.getElementById("pdf-analisis");
+  if(!cont) return;
+  cont.innerHTML = `
+    <div class="grid cards" style="margin-top:0">
+      <div class="card" style="background:var(--ot-soft)">
+        <div class="lbl" style="color:var(--ot)">Horas extra totales</div>
+        <div class="val" style="color:var(--ot)">${fmt(a.totEx)}</div>
+        <div class="det">${a.personas.filter(p=>p.ex>0).length} persona(s) con extras</div>
+      </div>
+      <div class="card" style="background:var(--def-soft)">
+        <div class="lbl" style="color:var(--def)">Se fueron antes (horas)</div>
+        <div class="val" style="color:var(--def)">${fmt(a.totFa)}</div>
+        <div class="det">${a.personas.filter(p=>p.fa>0).length} persona(s) salieron antes</div>
+      </div>
+      <div class="card" style="background:var(--brand-soft)">
+        <div class="lbl" style="color:var(--brand)">Horas a pagar</div>
+        <div class="val" style="color:var(--brand)">${fmt(a.horasPagar)}</div>
+        <div class="det">Extras menos salidas antes, por persona</div>
+      </div>
+      <div class="card" style="background:${a.totalPagar>0?"var(--ok-soft)":"#EEF1F0"}">
+        <div class="lbl" style="color:var(--ok)">Total a pagar</div>
+        <div class="val" style="color:var(--ok)">${tarifa>0 ? fmtDinero(a.totalPagar) : "—"}</div>
+        <div class="det">${tarifa>0 ? "a " + fmtDinero(tarifa) + " por hora" : "Indica la tarifa por hora arriba"}</div>
+      </div>
+    </div>
+    <div class="table-scroll" style="margin-top:14px">
+      <table><thead><tr>
+        <th>Nombre</th><th>Posición</th><th>Días</th><th>Horas extra</th><th>Se fue antes</th><th>Balance</th><th>A pagar</th>
+      </tr></thead><tbody>
+      ${a.personas.map(p=>`<tr>
+        <td style="font-weight:600">${esc(p.nombre)}</td><td>${chip(p.rol)}</td><td>${p.dias}</td>
+        <td class="${p.ex>0?'num-ot':'muted'}">${fmt(p.ex)}</td>
+        <td class="${p.fa>0?'num-def':'muted'}">${fmt(p.fa)}</td>
+        <td class="${p.balance>0?'num-ot':p.balance<0?'num-def':'muted'}">${p.balance>0?"+":""}${fmt(p.balance)}</td>
+        <td style="font-weight:600">${tarifa>0 ? fmtDinero(p.pagar) : "—"}</td>
+      </tr>`).join("")}
+      </tbody></table>
+    </div>`;
+}
+
+function descargarAnalisisPDF(){
+  if(filasDetectadasPDF.length === 0){ msgCSV("No hay datos del PDF para analizar.", "err"); return; }
+  const tarifa = parseFloat(document.getElementById("pdf-tarifa")?.value) || 0;
+  const a = analisisDesdeFilas(filasDetectadasPDF, tarifa);
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const marginX = 40;
+  let y = 50;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(21,36,32);
+  doc.text("Análisis de horas extra", marginX, y);
+  y += 20;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(90,100,96);
+  doc.text(`Archivo analizado: ${pdfArchivoActual}`, marginX, y); y += 14;
+  doc.text(`Generado: ${new Date().toLocaleString("es-ES")}`, marginX, y); y += 14;
+  if(tarifa > 0){ doc.text(`Tarifa por hora extra: ${fmtDinero(tarifa)}`, marginX, y); y += 14; }
+  y += 10;
+
+  // Tarjetas resumen
+  const cardW = (595 - marginX*2 - 30) / 4;
+  const cards = [
+    {label:"Horas extra", val: fmt(a.totEx), color:[185,117,15]},
+    {label:"Se fueron antes", val: fmt(a.totFa), color:[178,59,42]},
+    {label:"Horas a pagar", val: fmt(a.horasPagar), color:[19,98,81]},
+    {label:"Total a pagar", val: tarifa>0 ? fmtDinero(a.totalPagar) : "—", color:[29,122,69]}
+  ];
+  cards.forEach((c,i)=>{
+    const x = marginX + i*(cardW+10);
+    doc.setDrawColor(220,228,224);
+    doc.roundedRect(x, y, cardW, 54, 6, 6, "S");
+    doc.setFontSize(7.5);
+    doc.setTextColor(c.color[0],c.color[1],c.color[2]);
+    doc.text(c.label.toUpperCase(), x+8, y+16);
+    doc.setFontSize(13);
+    doc.setFont("helvetica","bold");
+    doc.text(String(c.val), x+8, y+38);
+    doc.setFont("helvetica","normal");
+  });
+  y += 54 + 26;
+
+  // Tabla por persona con total a pagar
+  doc.setFontSize(12); doc.setTextColor(21,36,32); doc.setFont("helvetica","bold");
+  doc.text("Detalle por persona", marginX, y);
+  const bodyPersonas = a.personas.map(p=>[
+    p.nombre, ROLES[p.rol].label, p.dias, fmt(p.ex), fmt(p.fa),
+    (p.balance>0?"+":"")+fmt(p.balance),
+    tarifa>0 ? fmtDinero(p.pagar) : "—"
+  ]);
+  bodyPersonas.push([
+    {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "",
+    {content:fmt(a.totEx), styles:{fontStyle:"bold"}},
+    {content:fmt(a.totFa), styles:{fontStyle:"bold"}},
+    {content:fmt(a.totEx - a.totFa), styles:{fontStyle:"bold"}},
+    {content: tarifa>0 ? fmtDinero(a.totalPagar) : "—", styles:{fontStyle:"bold"}}
+  ]);
+  doc.autoTable({
+    startY: y+10, margin:{left:marginX,right:marginX},
+    head: [["Nombre","Posición","Días","Horas extra","Se fue antes","Balance","A pagar"]],
+    body: bodyPersonas,
+    styles:{fontSize:9, cellPadding:6},
+    headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
+  });
+  y = doc.lastAutoTable.finalY + 24;
+
+  // Registros dia a dia del PDF
+  if(y > 650){ doc.addPage(); y = 50; }
+  doc.setFontSize(12); doc.setFont("helvetica","bold");
+  doc.text("Registros día a día (leídos del PDF)", marginX, y);
+  const orden = filasDetectadasPDF.slice().sort((x1,x2)=> x1.fecha.localeCompare(x2.fecha) || x1.nombre.localeCompare(x2.nombre));
+  doc.autoTable({
+    startY: y+10, margin:{left:marginX,right:marginX},
+    head: [["Fecha","Nombre","Posición","Trabajadas","Programadas","Extra","Se fue antes"]],
+    body: orden.map(r=>{
+      const ex = Math.max(0, r.trab - r.prog), fa = Math.max(0, r.prog - r.trab);
+      return [r.fecha, r.nombre, ROLES[r.rol].label, fmt(r.trab), fmt(r.prog), ex>0?fmt(ex):"—", fa>0?fmt(fa):"—"];
+    }),
+    styles:{fontSize:8.5, cellPadding:5},
+    headStyles:{fillColor:[241,244,242], textColor:[21,36,32]}
+  });
+
+  doc.save(`analisis-horas-extra-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
 function mostrarPreviewPDF(){
   const cont = document.getElementById("pdf-preview");
   const opcionesRol = Object.keys(ROLES).map(k => `<option value="${k}">${ROLES[k].label}</option>`).join("");
@@ -542,11 +701,11 @@ function mostrarPreviewPDF(){
       </tr></thead><tbody>
       ${filasDetectadasPDF.map((r,i)=>`<tr class="preview-row-editable">
         <td><input type="checkbox" class="chk" data-i="${i}" checked></td>
-        <td><input type="date" value="${r.fecha}" onchange="filasDetectadasPDF[${i}].fecha=this.value"></td>
-        <td><input type="text" value="${esc(r.nombre)}" onchange="filasDetectadasPDF[${i}].nombre=this.value"></td>
-        <td><select onchange="filasDetectadasPDF[${i}].rol=this.value">${opcionesRol.replace(`value="${r.rol}"`, `value="${r.rol}" selected`)}</select></td>
-        <td><input type="number" step="0.25" value="${r.trab}" onchange="filasDetectadasPDF[${i}].trab=parseFloat(this.value)||0"></td>
-        <td><input type="number" step="0.25" value="${r.prog}" onchange="filasDetectadasPDF[${i}].prog=parseFloat(this.value)||0"></td>
+        <td><input type="date" value="${r.fecha}" onchange="filasDetectadasPDF[${i}].fecha=this.value;renderAnalisisPDF()"></td>
+        <td><input type="text" value="${esc(r.nombre)}" onchange="filasDetectadasPDF[${i}].nombre=this.value;renderAnalisisPDF()"></td>
+        <td><select onchange="filasDetectadasPDF[${i}].rol=this.value;renderAnalisisPDF()">${opcionesRol.replace(`value="${r.rol}"`, `value="${r.rol}" selected`)}</select></td>
+        <td><input type="number" step="0.25" value="${r.trab}" onchange="filasDetectadasPDF[${i}].trab=parseFloat(this.value)||0;renderAnalisisPDF()"></td>
+        <td><input type="number" step="0.25" value="${r.prog}" onchange="filasDetectadasPDF[${i}].prog=parseFloat(this.value)||0;renderAnalisisPDF()"></td>
         <td class="${r.extra>0?'num-ot':'muted'}">${fmt(r.extra)}</td>
       </tr>`).join("")}
       </tbody></table>
@@ -571,6 +730,20 @@ function mostrarPreviewPDF(){
     </div>
     ${tablaDetectados}
 
+    ${filasDetectadasPDF.length > 0 ? `
+    <div class="preview-head" style="margin-top:26px">
+      <div><strong>Análisis del PDF</strong> — extras, salidas antes y total a pagar</div>
+      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+        <div>
+          <label for="pdf-tarifa">Tarifa por hora ($)</label>
+          <input type="number" id="pdf-tarifa" min="0" step="0.5" placeholder="Ej. 12.50" style="width:130px" oninput="renderAnalisisPDF()">
+        </div>
+        <button class="btn" onclick="descargarAnalisisPDF()">Descargar análisis en PDF</button>
+      </div>
+    </div>
+    <div id="pdf-analisis"></div>
+    ` : ""}
+
     <div class="preview-head" style="margin-top:22px">
       <div><strong>Detalle completo del PDF</strong> — todo el texto leído de "${esc(pdfArchivoActual)}"</div>
       <div class="cnt">${pdfPaginasActuales.length} página(s)</div>
@@ -579,6 +752,7 @@ function mostrarPreviewPDF(){
     ${filasDetectadasPDF.length === 0 ? `<div class="row-actions"><button class="btn secondary" onclick="cancelarPreviewPDF()">Cerrar</button></div>` : ""}
   `;
   cont.style.display = "block";
+  renderAnalisisPDF();
 }
 
 function cancelarPreviewPDF(){
