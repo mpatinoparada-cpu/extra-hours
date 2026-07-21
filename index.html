@@ -36,9 +36,10 @@
   .barra .archivo{font-size:13.5px;color:var(--tinta-suave)}
   .acciones{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
   label{display:block;font-size:12.5px;font-weight:600;color:var(--tinta-suave);margin-bottom:4px}
-  input[type="number"]{padding:9px 10px;border:1px solid var(--linea);border-radius:9px;font-size:15px;
-    font-family:'Barlow',sans-serif;width:130px;background:var(--panel)}
-  input[type="number"]:focus{outline:2px solid var(--verde);outline-offset:1px;border-color:var(--verde)}
+  input[type="number"],select{padding:9px 10px;border:1px solid var(--linea);border-radius:9px;font-size:15px;
+    font-family:'Barlow',sans-serif;background:var(--panel)}
+  input[type="number"]{width:130px}
+  input[type="number"]:focus,select:focus{outline:2px solid var(--verde);outline-offset:1px;border-color:var(--verde)}
   .btn{padding:11px 18px;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer;
     font-family:'Barlow',sans-serif;background:var(--verde);color:#fff;transition:filter .15s}
   .btn:hover{filter:brightness(1.1)}
@@ -102,6 +103,13 @@
       </div>
       <div class="acciones">
         <div>
+          <label for="orden">Orden de horas en el PDF</label>
+          <select id="orden" onchange="reinterpretar()">
+            <option value="prog-primero">Programadas primero (Call → Actual)</option>
+            <option value="real-primero">Reales primero (Actual → Call)</option>
+          </select>
+        </div>
+        <div>
           <label for="tarifa">Tarifa por hora ($)</label>
           <input type="number" id="tarifa" min="0" step="0.5" placeholder="Ej. 12.50" oninput="pintar()">
         </div>
@@ -123,7 +131,7 @@
     </section>
 
     <details id="detalle-registros">
-      <summary>Ver registros día a día leídos del PDF</summary>
+      <summary>Ver comparación de horarios persona por persona (programado vs real)</summary>
       <div class="tabla" id="tabla-registros" style="margin-top:8px"></div>
     </details>
 
@@ -139,20 +147,31 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 const POSICIONES = {
-  server:     {label:"Server",     claves:["server","mesero","mesera","waiter","waitress"]},
-  kitchen:    {label:"Kitchen",    claves:["kitchen","cocina","cocinero","cocinera","cook","chef"]},
-  pantry:     {label:"Pantry",     claves:["pantry","despensa"]},
-  bartender:  {label:"Bartender",  claves:["bartender","barra","barman"]},
-  busser:     {label:"Busser",     claves:["busser","busboy"]},
-  dishwasher: {label:"Dishwasher", claves:["dishwasher","lavaplatos","steward"]},
-  host:       {label:"Host",       claves:["host","hostess","anfitrion","anfitriona"]},
-  supervisor: {label:"Supervisor", claves:["supervisor","captain","capitan","lead","encargado","encargada","manager"]},
-  otro:       {label:"Otro",       claves:[]}
+  "SERV":   "Server",
+  "SRVSUP": "Server Supervisor",
+  "BAR":    "Bartender",
+  "BARSUP": "Bar Supervisor",
+  "KIT":    "Kitchen",
+  "KITSUP": "Kitchen Supervisor",
+  "KA":     "Kitchen Assistant",
+  "K/S":    "Kitchen Steward",
+  "PANT":   "Pantry",
+  "PANTRY": "Pantry",
+  "CHEF":   "Chef",
+  "SOUS":   "Sous Chef",
+  "DISH":   "Dishwasher",
+  "HOST":   "Host",
+  "BUS":    "Busser",
+  "CAPT":   "Captain",
+  "PORT":   "Porter",
+  "DRV":    "Driver"
 };
+function labelPos(cod){ return POSICIONES[cod] || cod; }
 
-let registros = [];       // {fecha, nombre, rol, trab, prog, extra, antes}
+let registros = [];       // {fecha, nombre, rol, progIn, progOut, realIn, realOut, trab, prog, extra, antes}
 let paginasTexto = [];    // [{numero, lineas:[]}]
 let nombreArchivo = "";
+let infoEvento = {};      // {fecha, numero, nombre, invitados, horario}
 
 /* ---------- Utilidades ---------- */
 const fmt = n => (Math.round(n*100)/100).toLocaleString("es-ES", {maximumFractionDigits:2}) + " h";
@@ -194,80 +213,78 @@ async function leerPDF(file){
 }
 
 /* ---------- Interpretación de las líneas ---------- */
-function normalizarFecha(txt){
-  let m = txt.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
-  m = txt.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
-  if(m){
-    let dia = parseInt(m[1]), mes = parseInt(m[2]);
-    if(mes > 12 && dia <= 12){ [dia, mes] = [mes, dia]; }
-    if(mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
-    return `${m[3]}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
-  }
-  return null;
+
+// "03:00 PM" → 15.0 (horas decimales)
+function horaAMPM(txt){
+  const m = txt.match(/(\d{1,2}):(\d{2})\s*([AP])\.?M/i);
+  if(!m) return null;
+  let h = parseInt(m[1]) % 12;
+  if(m[3].toUpperCase() === "P") h += 12;
+  return h + parseInt(m[2])/60;
 }
 
-function detectarPosicion(texto){
-  const t = texto.toLowerCase();
-  for(const k in POSICIONES){
-    for(const clave of POSICIONES[k].claves){
-      if(t.includes(clave)) return k;
-    }
-  }
-  return "otro";
+// Duración entre dos horas; si termina "antes" de empezar, cruzó medianoche
+function duracion(ini, fin){
+  let d = fin - ini;
+  if(d < 0) d += 24;
+  return d;
 }
 
-// Convierte "18:30" a horas decimales; también acepta "9.5" o "9,5"
-function aHoras(txt){
-  const hm = txt.match(/^(\d{1,2}):(\d{2})$/);
-  if(hm) return parseInt(hm[1]) + parseInt(hm[2])/60;
-  return parseFloat(txt.replace(",", "."));
+// Muestra "03:00 PM" de forma compacta "3:00p"
+function horaCorta(txt){
+  return txt.replace(/^0/, "").replace(/\s*AM/i, "a").replace(/\s*PM/i, "p");
 }
+
+function extraerInfoEvento(lineas){
+  const info = {};
+  for(const l of lineas){
+    let m = l.match(/Event:\s*(?:[A-Za-zÁ-ú]+\s+)?(\d{1,2})[\.\/](\d{1,2})[\.\/](\d{4})/i);
+    if(m && !info.fecha) info.fecha = `${m[3]}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;
+    m = l.match(/Event\s*#:\s*(.+)/i);
+    if(m && !info.numero) info.numero = m[1].replace(/Page:.*/i,"").trim();
+    m = l.match(/([\d\/]+)\s+Guests/i);
+    if(m && !info.invitados) info.invitados = m[1];
+    m = l.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*[-–]\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
+    if(m && !info.horario && /guest|phpd|event/i.test(l)) info.horario = m[1] + " – " + m[2];
+  }
+  return info;
+}
+
+// Línea de trabajador: CODIGO Apellido, Nombre  H1 H2 H3 H4  (Call In, Call Out, Actual In, Actual Out)
+const RE_TRABAJADOR = /^([A-Z][A-Z\/\-\.]{1,9})\s+(.+?)\s+(\d{1,2}:\d{2}\s*[AP]M)\s+(\d{1,2}:\d{2}\s*[AP]M)\s+(\d{1,2}:\d{2}\s*[AP]M)\s+(\d{1,2}:\d{2}\s*[AP]M)\s*$/i;
 
 function interpretar(lineas){
+  infoEvento = extraerInfoEvento(lineas);
+  const ordenReal = document.getElementById("orden") && document.getElementById("orden").value === "real-primero";
   const filas = [];
   for(const linea of lineas){
-    const fecha = normalizarFecha(linea);
-    if(!fecha) continue;
+    const m = linea.trim().match(RE_TRABAJADOR);
+    if(!m) continue;
+    const rol = m[1].toUpperCase();
+    if(rol === "TYPE" || rol === "PAGE") continue;
+    const nombre = m[2].trim().replace(/\s{2,}/g, " ");
+    // Orden por defecto: Call In, Call Out, Actual In, Actual Out
+    let progIn = m[3], progOut = m[4], realIn = m[5], realOut = m[6];
+    if(ordenReal){ [progIn, progOut, realIn, realOut] = [m[5], m[6], m[3], m[4]]; }
 
-    let resto = linea.replace(/(\d{4}-\d{1,2}-\d{1,2})|(\d{1,2}[\/-]\d{1,2}[\/-]\d{4})/, " ").trim();
-
-    // Rango de horario tipo "18:00 - 02:30" → duración
-    const rango = resto.match(/(\d{1,2}:\d{2})\s*[-–a]\s*(\d{1,2}:\d{2})/);
-    let trab = NaN, prog = 8;
-    if(rango){
-      let ini = aHoras(rango[1]), fin = aHoras(rango[2]);
-      if(fin < ini) fin += 24; // cruzó medianoche
-      trab = fin - ini;
-      resto = resto.replace(rango[0], " ");
-      const otros = [...resto.matchAll(/\d+([.,]\d+)?/g)].map(m => parseFloat(m[0].replace(",",".")));
-      if(otros.length >= 1 && otros[0] > 0 && otros[0] <= 24) prog = otros[0];
-    } else {
-      const numeros = [...resto.matchAll(/\d+([.,]\d+)?/g)].map(m => parseFloat(m[0].replace(",",".")));
-      if(numeros.length >= 2){ trab = numeros[0]; prog = numeros[1]; }
-      else if(numeros.length === 1){ trab = numeros[0]; }
-    }
-    if(isNaN(trab) || trab <= 0 || trab > 24) continue;
-    if(isNaN(prog) || prog <= 0 || prog > 24) prog = 8;
-
-    const idxNum = resto.search(/\d/);
-    let nombre = (idxNum >= 0 ? resto.slice(0, idxNum) : resto).trim().replace(/[-–:|,]+$/,"").trim();
-    const rol = detectarPosicion(linea);
-    if(rol !== "otro"){
-      for(const clave of POSICIONES[rol].claves){
-        nombre = nombre.replace(new RegExp("\\b"+clave+"\\b","i"), "").trim();
-      }
-      nombre = nombre.replace(new RegExp("\\b"+POSICIONES[rol].label+"\\b","i"), "").trim();
-    }
-    if(!nombre) continue;
+    const prog = duracion(horaAMPM(progIn), horaAMPM(progOut));
+    const trab = duracion(horaAMPM(realIn), horaAMPM(realOut));
+    if(prog <= 0 || prog > 20 || trab <= 0 || trab > 20) continue;
 
     filas.push({
-      fecha, nombre, rol, trab, prog,
+      fecha: infoEvento.fecha || "—",
+      nombre, rol, progIn, progOut, realIn, realOut,
+      trab, prog,
       extra: Math.max(0, trab - prog),
       antes: Math.max(0, prog - trab)
     });
   }
   return filas;
+}
+
+function reinterpretar(){
+  registros = interpretar(paginasTexto.flatMap(p => p.lineas));
+  pintar();
 }
 
 /* ---------- Flujo principal ---------- */
@@ -284,11 +301,17 @@ async function analizar(file){
     registros = interpretar(paginasTexto.flatMap(p => p.lineas));
     nombreArchivo = file.name;
     if(registros.length === 0){
-      mensaje("No se reconocieron registros de horas en el PDF. Abre \"Ver todo el texto leído\" abajo para revisar cómo vino el contenido.", "err");
+      mensaje("No se reconocieron trabajadores con sus 4 horas (Call In/Out y Actual In/Out). Abre \"Ver todo el texto leído\" abajo para revisar cómo vino el contenido.", "err");
     } else {
-      mensaje(registros.length + " registros leídos correctamente.", "ok");
+      mensaje(registros.length + " trabajadores leídos correctamente.", "ok");
     }
-    document.getElementById("nombre-archivo").textContent = nombreArchivo + " · " + paginasTexto.length + " página(s)";
+    const ev = [];
+    if(infoEvento.fecha) ev.push("Evento: " + infoEvento.fecha);
+    if(infoEvento.numero) ev.push("#" + infoEvento.numero);
+    if(infoEvento.invitados) ev.push(infoEvento.invitados + " invitados");
+    if(infoEvento.horario) ev.push(infoEvento.horario);
+    document.getElementById("nombre-archivo").textContent =
+      nombreArchivo + " · " + paginasTexto.length + " página(s)" + (ev.length ? " · " + ev.join(" · ") : "");
     document.getElementById("resultados").style.display = "block";
     pintar();
     document.getElementById("resultados").scrollIntoView({behavior:"smooth", block:"start"});
@@ -370,7 +393,7 @@ function pintar(){
     ${roles.map(rol => {
       const v = R.porRol[rol];
       return `<tr>
-        <td><span class="chip">${POSICIONES[rol].label}</span></td>
+        <td><span class="chip">${labelPos(rol)}</span></td>
         <td>${v.personas}</td>
         <td class="${v.conExtra>0?"n-ambar":"apagado"}">${v.conExtra}</td>
         <td class="${v.seFueAntes>0?"n-rojo":"apagado"}">${v.seFueAntes}</td>
@@ -393,7 +416,7 @@ function pintar(){
       const hp = Math.max(0, p.ex - p.an);
       return `<tr>
         <td style="font-weight:600">${esc(p.nombre)}</td>
-        <td><span class="chip">${POSICIONES[p.rol].label}</span></td>
+        <td><span class="chip">${labelPos(p.rol)}</span></td>
         <td>${p.dias}</td>
         <td>${fmt(p.trab)}</td>
         <td class="${p.ex>0?"n-ambar":"apagado"}">${p.ex>0?fmt(p.ex):"—"}</td>
@@ -413,12 +436,14 @@ function pintar(){
   const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
   document.getElementById("tabla-registros").innerHTML = `
     <table><thead><tr>
-      <th>Fecha</th><th>Nombre</th><th>Posición</th><th>Trabajadas</th><th>Programadas</th><th>Extra</th><th>Se fue antes</th>
+      <th>Nombre</th><th>Posición</th><th>Horario programado</th><th>Horario real</th><th>Prog.</th><th>Real</th><th>Extra</th><th>Se fue antes</th>
     </tr></thead><tbody>
     ${orden.map(r => `<tr>
-      <td>${r.fecha}</td><td>${esc(r.nombre)}</td>
-      <td><span class="chip">${POSICIONES[r.rol].label}</span></td>
-      <td>${fmt(r.trab)}</td><td>${fmt(r.prog)}</td>
+      <td style="font-weight:600">${esc(r.nombre)}</td>
+      <td><span class="chip">${labelPos(r.rol)}</span></td>
+      <td>${horaCorta(r.progIn)} – ${horaCorta(r.progOut)}</td>
+      <td style="font-weight:600">${horaCorta(r.realIn)} – ${horaCorta(r.realOut)}</td>
+      <td>${fmt(r.prog)}</td><td>${fmt(r.trab)}</td>
       <td class="${r.extra>0?"n-ambar":"apagado"}">${r.extra>0?fmt(r.extra):"—"}</td>
       <td class="${r.antes>0?"n-rojo":"apagado"}">${r.antes>0?fmt(r.antes):"—"}</td>
     </tr>`).join("")}
@@ -456,6 +481,12 @@ function descargarReporte(){
   doc.text("Reporte de horas del evento", mx, y); y += 20;
   doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(90,100,96);
   doc.text(`Archivo: ${nombreArchivo}`, mx, y); y += 14;
+  const evLinea = [
+    infoEvento.fecha ? "Fecha del evento: " + infoEvento.fecha : null,
+    infoEvento.numero ? "Evento #: " + infoEvento.numero : null,
+    infoEvento.invitados ? infoEvento.invitados + " invitados" : null
+  ].filter(Boolean).join("   ·   ");
+  if(evLinea){ doc.text(evLinea, mx, y); y += 14; }
   doc.text(`Generado: ${new Date().toLocaleString("es-ES")}`, mx, y); y += 14;
   if(t > 0){ doc.text(`Tarifa por hora: ${fmtDinero(t)}`, mx, y); y += 14; }
   y += 8;
@@ -485,7 +516,7 @@ function descargarReporte(){
   doc.text("Por posición", mx, y);
   const filasRol = Object.keys(R.porRol).map(rol=>{
     const v = R.porRol[rol];
-    return [POSICIONES[rol].label, v.personas, v.conExtra, v.seFueAntes, fmt(v.ex), fmt(v.an)];
+    return [labelPos(rol), v.personas, v.conExtra, v.seFueAntes, fmt(v.ex), fmt(v.an)];
   });
   filasRol.push([
     {content:"TOTAL", styles:{fontStyle:"bold"}},
@@ -509,7 +540,7 @@ function descargarReporte(){
   doc.text("Por persona", mx, y);
   const filasPers = R.personas.map(p=>{
     const hp = Math.max(0, p.ex - p.an);
-    return [p.nombre, POSICIONES[p.rol].label, p.dias, fmt(p.trab),
+    return [p.nombre, labelPos(p.rol), p.dias, fmt(p.trab),
       p.ex>0?fmt(p.ex):"—", p.an>0?fmt(p.an):"—", fmt(hp), t>0?fmtDinero(hp*t):"—"];
   });
   filasPers.push([
@@ -544,13 +575,14 @@ function descargarReporte(){
   const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
   if(y > 650){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
-  doc.text("Registros día a día", mx, y);
+  doc.text("Comparación de horarios (programado vs real)", mx, y);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Fecha","Nombre","Posición","Trabajadas","Programadas","Extra","Se fue antes"]],
-    body:orden.map(r=>[r.fecha, r.nombre, POSICIONES[r.rol].label, fmt(r.trab), fmt(r.prog),
+    head:[["Nombre","Posición","Prog. In","Prog. Out","Real In","Real Out","Prog.","Real","Extra","Antes"]],
+    body:orden.map(r=>[r.nombre, labelPos(r.rol), r.progIn, r.progOut, r.realIn, r.realOut,
+      fmt(r.prog), fmt(r.trab),
       r.extra>0?fmt(r.extra):"—", r.antes>0?fmt(r.antes):"—"]),
-    styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
+    styles:{fontSize:7.5, cellPadding:4}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
   });
 
   doc.save(`reporte-evento-${new Date().toISOString().slice(0,10)}.pdf`);
