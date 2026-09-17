@@ -79,32 +79,15 @@
   .archivo-chip button{border:none;background:#EEF1F0;color:var(--tinta-suave);border-radius:50%;width:22px;height:22px;
     cursor:pointer;font-size:14px;line-height:1;font-family:inherit}
   .archivo-chip button:hover{background:#DDE3E0;color:var(--rojo)}
-  /* Panel de tarifas */
-  .panel-tarifas{background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:16px}
-  .rejilla-tarifas{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:10px;margin-top:14px}
-  .casilla{border:1px solid var(--linea);border-radius:11px;padding:12px 13px;background:var(--papel)}
-  .casilla.puesta{border-color:#BBD6C9;background:var(--verde-suave)}
-  .casilla .puesto{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px;line-height:1.15}
-  .casilla .gente{font-size:12.5px;color:var(--tinta-suave);margin-top:2px}
-  .casilla .campo{display:flex;align-items:center;gap:6px;margin-top:9px}
-  .casilla .signo{font-size:15px;font-weight:600;color:var(--tinta-suave)}
-  .casilla input{width:100%;padding:7px 9px;border:1px solid var(--linea);border-radius:8px;font-size:15px;
-    font-family:'Barlow',sans-serif;background:var(--panel)}
-  .casilla input:focus{outline:2px solid var(--verde);outline-offset:1px;border-color:var(--verde)}
-  .casilla .sub{font-size:12.5px;color:var(--tinta-suave);margin-top:7px}
-  .casilla .sub strong{color:var(--verde);font-size:14px}
-  .fila-campos{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .barra-progreso{height:5px;background:#E4EAE7;border-radius:99px;overflow:hidden;margin-top:10px;display:none}
+  .barra-progreso > div{height:100%;background:var(--verde);width:0%;transition:width .2s}
+  /* Tarifa escrita a mano en la fila de cada persona */
   .nota{font-size:13px;color:var(--tinta-suave);margin-top:10px;line-height:1.5}
   input.tarifa-celda{width:92px;padding:6px 8px;border:1px solid var(--linea);border-radius:7px;font-size:14px;
     font-family:'Barlow',sans-serif;background:var(--panel)}
-  input.tarifa-celda:focus{outline:2px solid var(--verde);outline-offset:1px}
+  input.tarifa-celda:focus{outline:2px solid var(--verde);outline-offset:1px;border-color:var(--verde)}
   input.tarifa-celda.heredada{color:var(--tinta-suave);background:#F7F9F8}
-  .sin-asignar{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-  .sin-asignar .pendiente{display:flex;align-items:center;gap:8px;background:var(--ambar-suave);border:1px solid #EBD9B8;
-    border-radius:9px;padding:6px 10px;font-size:13px}
-  .sin-asignar select{padding:5px 7px;font-size:13px;border-radius:7px}
-  .barra-progreso{height:5px;background:#E4EAE7;border-radius:99px;overflow:hidden;margin-top:10px;display:none}
-  .barra-progreso > div{height:100%;background:var(--verde);width:0%;transition:width .2s}
+  .col-extra{background:var(--ambar-suave)}
   @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -158,36 +141,17 @@
         <div>
           <label for="detalle-reporte">PDF report</label>
           <select id="detalle-reporte">
-            <option value="resumen">Positions and total only</option>
-            <option value="completo">Add the person-by-person detail</option>
+            <option value="resumen">Positions, people and overtime</option>
+            <option value="completo">Also add scheduled vs actual times</option>
           </select>
         </div>
         <button class="btn" onclick="descargarReporte()">⬇ Download PDF report</button>
+        <button class="btn suave" onclick="limpiarTarifas()">Clear rates</button>
         <button class="btn suave" onclick="reiniciar()">Start over</button>
       </div>
     </div>
 
     <div class="tarjetas" id="tarjetas"></div>
-
-    <section>
-      <h3>Hourly rate for each position</h3>
-      <div class="panel-tarifas">
-        <div id="tabla-tarifas"></div>
-        <div id="tarifas-pendientes"></div>
-        <div class="fila-campos" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--linea)">
-          <div>
-            <label for="tarifa">Rate for any position left blank ($/h)</label>
-            <input type="number" id="tarifa" min="0" step="0.5" placeholder="optional" onchange="pintar()">
-          </div>
-          <div style="flex:1;min-width:200px">
-            <label>Rates read from your files</label>
-            <div id="estado-tarifas" class="chip">No rates detected yet</div>
-          </div>
-          <button class="btn suave" onclick="limpiarTarifas()">Clear rates</button>
-        </div>
-        <div class="nota">Each position is paid at its own rate. If one person needs a different rate, change it in their row under “By person”.</div>
-      </div>
-    </section>
 
     <section>
       <h3>By position</h3>
@@ -197,6 +161,7 @@
     <section>
       <h3>By person</h3>
       <div class="tabla" id="tabla-personas"></div>
+      <div class="nota" id="nota-tarifas">Type each person’s hourly rate in the rate column. Rates read from your files come in already filled — overwrite any of them.</div>
     </section>
 
     <details id="detalle-registros">
@@ -251,7 +216,7 @@ let idDoc = 0;
 const fmt = n => (Math.round(n*100)/100).toLocaleString("en-US", {maximumFractionDigits:2}) + " h";
 const fmtDinero = n => "$" + (Math.round(n*100)/100).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
 const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-const tarifa = () => parseFloat(document.getElementById("tarifa").value) || 0;
+const tarifa = () => parseFloat((document.getElementById("tarifa") || {}).value) || 0;
 const baseHoras = () => (document.getElementById("base") || {}).value || "real";
 
 /* Clave estable para un nombre: minúsculas, sin comas ni acentos, tokens ordenados */
@@ -293,7 +258,7 @@ const detalleReporte = () => (document.getElementById("detalle-reporte") || {}).
 function guardarTarifas(){
   try{
     localStorage.setItem("eha-tarifas", JSON.stringify({
-      rol: tarifasRol, persona: tarifasPersona, defecto: document.getElementById("tarifa").value
+      rol: tarifasRol, persona: tarifasPersona
     }));
   }catch(e){ /* almacenamiento no disponible: seguimos sin guardar */ }
 }
@@ -302,12 +267,10 @@ function cargarTarifas(){
     const g = JSON.parse(localStorage.getItem("eha-tarifas") || "null");
     if(!g) return;
     tarifasRol = g.rol || {}; tarifasPersona = g.persona || {};
-    if(g.defecto) document.getElementById("tarifa").value = g.defecto;
   }catch(e){ /* sin almacenamiento */ }
 }
 function limpiarTarifas(){
   tarifasRol = {}; tarifasPersona = {}; tarifasPendientes = [];
-  document.getElementById("tarifa").value = "";
   guardarTarifas(); pintar();
 }
 
@@ -706,15 +669,17 @@ function resumen(){
     p.tarifa = t.valor; p.origenTarifa = t.origen;
     p.horasPago = horasPagoDe(p);
     p.importe = p.horasPago * p.tarifa;
+    p.importeExtra = p.ex * p.tarifa;   // lo que cuestan las horas extra
   }
   const porRol = {};
   for(const p of personas){
-    if(!porRol[p.rol]) porRol[p.rol] = {personas:0, conExtra:0, seFueAntes:0, ex:0, an:0, horas:0, importe:0, tarifas:new Set()};
+    if(!porRol[p.rol]) porRol[p.rol] = {personas:0, conExtra:0, seFueAntes:0, ex:0, an:0, horas:0, importe:0, importeExtra:0, tarifas:new Set()};
     porRol[p.rol].personas += 1;
     if(p.ex > 0) porRol[p.rol].conExtra += 1;
     if(p.an > 0) porRol[p.rol].seFueAntes += 1;
     porRol[p.rol].ex += p.ex; porRol[p.rol].an += p.an;
     porRol[p.rol].horas += p.horasPago; porRol[p.rol].importe += p.importe;
+    porRol[p.rol].importeExtra += p.importeExtra;
     if(p.tarifa > 0) porRol[p.rol].tarifas.add(p.tarifa);
   }
   const horasPagar = personas.reduce((s,p)=>s+p.horasPago, 0);
@@ -729,7 +694,7 @@ function resumen(){
     totAn: personas.reduce((s,p)=>s+p.an,0),
     totTrab: personas.reduce((s,p)=>s+p.trab,0),
     netoExtra: personas.reduce((s,p)=>s+Math.max(0, p.ex - p.an), 0),
-    costoExtra: personas.reduce((s,p)=>s+Math.max(0, p.ex - p.an)*p.tarifa, 0),
+    costoExtra: personas.reduce((s,p)=>s+p.importeExtra, 0),
     horasPagar, totalPagar, sinTarifa
   };
 }
@@ -740,8 +705,6 @@ function pintar(){
     document.getElementById("tabla-posiciones").innerHTML = "";
     document.getElementById("tabla-personas").innerHTML = "";
     document.getElementById("tabla-registros").innerHTML = "";
-    document.getElementById("tabla-tarifas").innerHTML = "";
-    document.getElementById("tarifas-pendientes").innerHTML = "";
     pintarTexto();
     return;
   }
@@ -749,9 +712,9 @@ function pintar(){
 
   document.getElementById("tarjetas").innerHTML = `
     <div class="tarjeta t-ambar">
-      <div class="etq">With overtime</div>
-      <div class="num">${R.conExtra}</div>
-      <div class="det">${R.conExtra===1?"person":"people"} · ${fmt(R.totEx)} total · ${fmtDinero(R.costoExtra)}</div>
+      <div class="etq">Overtime</div>
+      <div class="num">${fmt(R.totEx)}</div>
+      <div class="det">${R.conExtra} ${R.conExtra===1?"person":"people"} · ${R.costoExtra>0?fmtDinero(R.costoExtra)+" in overtime":"no rates yet"}</div>
     </div>
     <div class="tarjeta t-rojo">
       <div class="etq">Left early</div>
@@ -771,22 +734,20 @@ function pintar(){
         : R.totalPersonas + " people, each at their own rate"}</div>
     </div>`;
 
-  pintarTarifas(R);
 
   const roles = Object.keys(R.porRol);
   document.getElementById("tabla-posiciones").innerHTML = `
     <table><thead><tr>
-      <th>Position</th><th>People</th><th>With overtime</th><th>Left early</th><th>Overtime hours</th><th>Hours left early</th><th>Hours to pay</th><th>Rate ($/h)</th><th>To pay ($)</th>
+      <th>Position</th><th>People</th><th class="col-extra">Overtime</th><th class="col-extra">Overtime pay</th><th>Left early</th><th>Hours to pay</th><th>Rate ($/h)</th><th>To pay ($)</th>
     </tr></thead><tbody>
     ${roles.map(rol => {
       const v = R.porRol[rol];
       return `<tr>
         <td><span class="chip">${labelPos(rol)}</span></td>
         <td>${v.personas}</td>
-        <td class="${v.conExtra>0?"n-ambar":"apagado"}">${v.conExtra}</td>
-        <td class="${v.seFueAntes>0?"n-rojo":"apagado"}">${v.seFueAntes}</td>
-        <td class="${v.ex>0?"n-ambar":"apagado"}">${fmt(v.ex)}</td>
-        <td class="${v.an>0?"n-rojo":"apagado"}">${fmt(v.an)}</td>
+        <td class="col-extra ${v.ex>0?"n-ambar":"apagado"}">${v.ex>0?fmt(v.ex):"—"}</td>
+        <td class="col-extra ${v.importeExtra>0?"n-ambar":"apagado"}">${v.importeExtra>0?fmtDinero(v.importeExtra):"—"}</td>
+        <td class="${v.an>0?"n-rojo":"apagado"}">${v.an>0?fmt(v.an):"—"}</td>
         <td>${fmt(v.horas)}</td>
         <td>${textoTarifaRol(v)}</td>
         <td style="font-weight:600">${v.importe>0?fmtDinero(v.importe):"—"}</td>
@@ -794,16 +755,17 @@ function pintar(){
     }).join("")}
     <tr class="fila-total">
       <td>TOTAL</td><td>${R.totalPersonas}</td>
-      <td>${R.conExtra}</td><td>${R.seFueronAntes}</td>
-      <td>${fmt(R.totEx)}</td><td>${fmt(R.totAn)}</td>
+      <td>${fmt(R.totEx)}</td><td>${R.costoExtra>0?fmtDinero(R.costoExtra):"—"}</td>
+      <td>${fmt(R.totAn)}</td>
       <td>${fmt(R.horasPagar)}</td><td></td><td>${R.totalPagar>0?fmtDinero(R.totalPagar):"—"}</td>
     </tr>
     </tbody></table>`;
 
   document.getElementById("tabla-personas").innerHTML = `
     <table><thead><tr>
-      <th>Name</th><th>Position</th><th>Days</th><th>Scheduled</th><th>Worked</th><th>Overtime</th><th>Left early</th>
-      <th>Hours to pay</th><th>Rate ($/h)</th><th>To pay ($)</th>
+      <th>Name</th><th>Position</th><th>Days</th><th>Scheduled</th><th>Worked</th>
+      <th class="col-extra">Overtime</th><th>Left early</th>
+      <th>Hours to pay</th><th>Rate ($/h)</th><th class="col-extra">Overtime pay</th><th>To pay ($)</th>
     </tr></thead><tbody>
     ${R.personas.map(p => `<tr>
         <td style="font-weight:600">${esc(p.nombre)}</td>
@@ -811,20 +773,22 @@ function pintar(){
         <td>${p.dias}</td>
         <td>${fmt(p.prog)}</td>
         <td>${fmt(p.trab)}</td>
-        <td class="${p.ex>0?"n-ambar":"apagado"}">${p.ex>0?fmt(p.ex):"—"}</td>
+        <td class="col-extra ${p.ex>0?"n-ambar":"apagado"}">${p.ex>0?fmt(p.ex):"—"}</td>
         <td class="${p.an>0?"n-rojo":"apagado"}">${p.an>0?fmt(p.an):"—"}</td>
         <td class="${p.horasPago>0?"n-verde":"apagado"}">${fmt(p.horasPago)}</td>
-        <td><input type="number" min="0" step="0.5" class="tarifa-celda ${p.origenTarifa==="person"?"":"heredada"}"
-             value="${p.tarifa>0?p.tarifa:""}" placeholder="${p.origenTarifa==="none"?"—":"inherited"}"
+        <td><input type="number" min="0" step="0.5" inputmode="decimal" class="tarifa-celda ${p.origenTarifa==="person"?"":"heredada"}"
+             value="${p.tarifa>0?p.tarifa:""}" placeholder="${p.origenTarifa==="none"?"rate":"inherited"}"
              title="${p.origenTarifa==="person"?"Rate for this person":p.origenTarifa==="position"?"From the "+labelPos(p.rol)+" rate":"Default rate"}"
              aria-label="Hourly rate for ${esc(p.nombre)}"
              onchange="fijarTarifaPersona('${clavePersona(p.nombre)}', this.value)"></td>
+        <td class="col-extra ${p.importeExtra>0?"n-ambar":"apagado"}">${p.importeExtra>0?fmtDinero(p.importeExtra):"—"}</td>
         <td style="font-weight:600">${p.importe>0 ? fmtDinero(p.importe) : "—"}</td>
       </tr>`).join("")}
     <tr class="fila-total">
       <td>TOTAL</td><td></td><td></td><td></td><td>${fmt(R.totTrab)}</td>
       <td>${fmt(R.totEx)}</td><td>${fmt(R.totAn)}</td>
       <td>${fmt(R.horasPagar)}</td><td></td>
+      <td>${R.costoExtra>0 ? fmtDinero(R.costoExtra) : "—"}</td>
       <td>${R.totalPagar>0 ? fmtDinero(R.totalPagar) : "—"}</td>
     </tr>
     </tbody></table>`;
@@ -848,52 +812,7 @@ function pintar(){
   pintarTexto();
 }
 
-/* ---------- Panel de tarifas ---------- */
-function pintarTarifas(R){
-  const roles = Object.keys(R.porRol);
-  const detectadas = Object.keys(tarifasRol).length + Object.keys(tarifasPersona).length;
-  const estado = document.getElementById("estado-tarifas");
-  estado.textContent = detectadas > 0
-    ? detectadas + (detectadas===1 ? " rate read from your files" : " rates read from your files")
-    : "No rates detected — enter them here";
-
-  document.getElementById("tabla-tarifas").innerHTML = `
-    <div class="rejilla-tarifas">
-    ${roles.map(rol => {
-      const valor = tarifaRolDe(rol), puesta = valor > 0;
-      const v = R.porRol[rol];
-      return `<div class="casilla ${puesta?"puesta":""}">
-        <div class="puesto">${labelPos(rol)}</div>
-        <div class="gente">${v.personas} ${v.personas===1?"person":"people"} · ${fmt(v.horas)} to pay</div>
-        <div class="campo">
-          <span class="signo">$</span>
-          <input type="number" min="0" step="0.5" inputmode="decimal"
-             value="${puesta?valor:""}" placeholder="${tarifa()>0?fmt2(tarifa()):"rate per hour"}"
-             aria-label="Hourly rate for ${labelPos(rol)}"
-             onchange="fijarTarifaRol('${rol}', this.value)">
-        </div>
-        <div class="sub">${v.importe>0 ? "Subtotal <strong>"+fmtDinero(v.importe)+"</strong>" : "No rate yet"}</div>
-      </div>`;
-    }).join("")}
-    </div>`;
-
-  const pend = document.getElementById("tarifas-pendientes");
-  if(tarifasPendientes.length === 0){ pend.innerHTML = ""; return; }
-  const opciones = [`<option value="">Assign to…</option>`]
-    .concat(roles.map(r=>`<option value="rol:${r}">${labelPos(r)}</option>`))
-    .concat(R.personas.map(p=>`<option value="per:${clavePersona(p.nombre)}">${esc(p.nombre)}</option>`))
-    .join("");
-  pend.innerHTML = `
-    <div class="nota" style="margin-top:14px;font-weight:600;color:var(--tinta)">Amounts found without a clear owner</div>
-    <div class="sin-asignar">
-      ${tarifasPendientes.map((p,i)=>`
-        <span class="pendiente">
-          <span>${esc(p.etiqueta)} → <strong>${fmtDinero(p.valor)}</strong></span>
-          <select onchange="asignarPendiente(${i}, this.value)">${opciones}</select>
-        </span>`).join("")}
-    </div>`;
-}
-
+/* ---------- Tarifas ---------- */
 const fmt2 = n => (Math.round(n*100)/100).toFixed(2);
 
 /* Texto de la tarifa de un puesto: una sola, varias, o ninguna */
@@ -904,22 +823,9 @@ function textoTarifaRol(v){
   return fmtDinero(Math.min(...ts)) + "–" + fmtDinero(Math.max(...ts));
 }
 
-function fijarTarifaRol(rol, valor){
-  const v = parseFloat(valor);
-  if(v > 0) tarifasRol[rol] = v; else delete tarifasRol[rol];
-  guardarTarifas(); pintar();
-}
 function fijarTarifaPersona(clave, valor){
   const v = parseFloat(valor);
   if(v > 0) tarifasPersona[clave] = v; else delete tarifasPersona[clave];
-  guardarTarifas(); pintar();
-}
-function asignarPendiente(indice, destino){
-  const p = tarifasPendientes[indice];
-  if(!p || !destino) return;
-  const [tipo, clave] = destino.split(":");
-  if(tipo === "rol") tarifasRol[clave] = p.valor; else tarifasPersona[clave] = p.valor;
-  tarifasPendientes.splice(indice, 1);
   guardarTarifas(); pintar();
 }
 
@@ -962,8 +868,8 @@ function descargarReporte(){
 
   const cardW = (595 - mx*2 - 30) / 4;
   const tarjetas = [
-    {etq:"WITH OVERTIME", val:`${R.conExtra} ppl.`, sub:fmt(R.totEx), color:[185,116,22]},
-    {etq:"LEFT EARLY", val:`${R.seFueronAntes} ppl.`, sub:fmt(R.totAn), color:[178,59,42]},
+    {etq:"OVERTIME HOURS", val:fmt(R.totEx), sub:`${R.conExtra} of ${R.totalPersonas} people`, color:[185,116,22]},
+    {etq:"OVERTIME PAY", val:R.costoExtra>0?fmtDinero(R.costoExtra):"—", sub:"included in the total", color:[185,116,22]},
     {etq:"HOURS TO PAY", val:fmt(R.horasPagar), sub:etiquetaBase(), color:[22,96,73]},
     {etq:"TOTAL TO PAY", val:R.totalPagar>0?fmtDinero(R.totalPagar):"—",
      sub:R.sinTarifa>0?`${R.sinTarifa} without rate`:"all rates set", color:[22,96,73]}
@@ -986,29 +892,40 @@ function descargarReporte(){
   doc.text("By position", mx, y);
   const filasRol = Object.keys(R.porRol).map(rol=>{
     const v = R.porRol[rol];
-    return [labelPos(rol), v.personas, fmt(v.horas), textoTarifaRol(v), v.importe>0?fmtDinero(v.importe):"—"];
+    return [labelPos(rol), v.personas, v.ex>0?fmt(v.ex):"—", v.importeExtra>0?fmtDinero(v.importeExtra):"—",
+      fmt(v.horas), textoTarifaRol(v), v.importe>0?fmtDinero(v.importe):"—"];
   });
   filasRol.push([
     {content:"TOTAL", styles:{fontStyle:"bold"}},
     {content:R.totalPersonas, styles:{fontStyle:"bold"}},
+    {content:fmt(R.totEx), styles:{fontStyle:"bold"}},
+    {content:R.costoExtra>0?fmtDinero(R.costoExtra):"—", styles:{fontStyle:"bold"}},
     {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}},
     "",
     {content:R.totalPagar>0?fmtDinero(R.totalPagar):"—", styles:{fontStyle:"bold", textColor:[22,96,73]}}
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Position","People","Hours to pay","Rate ($/h)","To pay ($)"]],
+    head:[["Position","People","Overtime","Overtime pay","Hours to pay","Rate ($/h)","To pay ($)"]],
     body:filasRol,
-    styles:{fontSize:10, cellPadding:7}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]},
-    columnStyles:{1:{halign:"right"}, 2:{halign:"right"}, 3:{halign:"right"}, 4:{halign:"right"}}
+    styles:{fontSize:9.5, cellPadding:6}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]},
+    columnStyles:{1:{halign:"right"}, 2:{halign:"right"}, 3:{halign:"right"}, 4:{halign:"right"}, 5:{halign:"right"}, 6:{halign:"right"}}
   });
   y = doc.lastAutoTable.finalY + 22;
 
   // Bloque total
   if(y > 720){ doc.addPage(); y = 50; }
+  doc.setFillColor(251,243,228);
+  doc.roundedRect(mx, y, 595 - mx*2, 34, 6, 6, "F");
+  doc.setFontSize(10.5); doc.setTextColor(185,116,22); doc.setFont("helvetica","bold");
+  doc.text(
+    `TOTAL OVERTIME: ${fmt(R.totEx)}` + (R.costoExtra > 0 ? `   =   ${fmtDinero(R.costoExtra)}` : ""),
+    mx + 14, y + 22);
+  y += 34 + 8;
+
   doc.setFillColor(226,239,234);
   doc.roundedRect(mx, y, 595 - mx*2, 42, 6, 6, "F");
-  doc.setFontSize(11); doc.setTextColor(22,96,73); doc.setFont("helvetica","bold");
+  doc.setFontSize(11); doc.setTextColor(22,96,73);
   doc.text(
     R.totalPagar > 0
       ? `TOTAL TO PAY: ${fmtDinero(R.totalPagar)}   (${fmt(R.horasPagar)} — ${etiquetaBase()})`
@@ -1017,39 +934,47 @@ function descargarReporte(){
   doc.setFont("helvetica","normal");
   y += 42 + 22;
 
-  if(detalleReporte() === "completo") anexoPorPersona(doc, R, mx, y);
+  y = anexoPorPersona(doc, R, mx, y);
+  if(detalleReporte() === "completo") anexoHorarios(doc, mx, y);
 
   doc.save(`event-report-${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
-/* Detalle persona a persona: solo si se pide */
+/* Detalle persona a persona, con sus horas extra */
 function anexoPorPersona(doc, R, mx, y){
-  if(y > 620){ doc.addPage(); y = 50; }
+  if(y > 600){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
   doc.text("By person", mx, y);
   const filasPers = R.personas.map(p=>[
-    p.nombre, labelPos(p.rol), p.dias, fmt(p.prog), fmt(p.trab),
+    p.nombre, labelPos(p.rol), fmt(p.prog), fmt(p.trab),
     p.ex>0?fmt(p.ex):"—", p.an>0?fmt(p.an):"—", fmt(p.horasPago),
-    p.tarifa>0?fmtDinero(p.tarifa):"—", p.importe>0?fmtDinero(p.importe):"—"
+    p.tarifa>0?fmtDinero(p.tarifa):"—",
+    p.importeExtra>0?fmtDinero(p.importeExtra):"—",
+    p.importe>0?fmtDinero(p.importe):"—"
   ]);
   filasPers.push([
-    {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "", "",
+    {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "",
     {content:fmt(R.totTrab), styles:{fontStyle:"bold"}},
-    {content:fmt(R.totEx), styles:{fontStyle:"bold"}},
+    {content:fmt(R.totEx), styles:{fontStyle:"bold", textColor:[185,116,22]}},
     {content:fmt(R.totAn), styles:{fontStyle:"bold"}},
     {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}}, "",
+    {content:R.costoExtra>0?fmtDinero(R.costoExtra):"—", styles:{fontStyle:"bold", textColor:[185,116,22]}},
     {content:R.totalPagar>0?fmtDinero(R.totalPagar):"—", styles:{fontStyle:"bold", textColor:[22,96,73]}}
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Name","Position","Days","Sched.","Worked","Overtime","Left early","Hours to pay","Rate","To pay ($)"]],
+    head:[["Name","Position","Sched.","Worked","Overtime","Left early","Hours to pay","Rate","Overtime pay","To pay ($)"]],
     body:filasPers,
-    styles:{fontSize:8, cellPadding:4}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
+    styles:{fontSize:8, cellPadding:4.5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]},
+    columnStyles:{4:{fillColor:[251,243,228]}, 8:{fillColor:[251,243,228]}}
   });
-  y = doc.lastAutoTable.finalY + 22;
+  return doc.lastAutoTable.finalY + 22;
+}
 
+/* Horarios programados contra reales: solo si se pide */
+function anexoHorarios(doc, mx, y){
   const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
-  if(y > 650){ doc.addPage(); y = 50; }
+  if(y > 640){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
   doc.text("Schedule comparison (scheduled vs actual)", mx, y);
   doc.autoTable({
