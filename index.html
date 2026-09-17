@@ -81,6 +81,18 @@
   .archivo-chip button:hover{background:#DDE3E0;color:var(--rojo)}
   /* Panel de tarifas */
   .panel-tarifas{background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:16px}
+  .rejilla-tarifas{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:10px;margin-top:14px}
+  .casilla{border:1px solid var(--linea);border-radius:11px;padding:12px 13px;background:var(--papel)}
+  .casilla.puesta{border-color:#BBD6C9;background:var(--verde-suave)}
+  .casilla .puesto{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px;line-height:1.15}
+  .casilla .gente{font-size:12.5px;color:var(--tinta-suave);margin-top:2px}
+  .casilla .campo{display:flex;align-items:center;gap:6px;margin-top:9px}
+  .casilla .signo{font-size:15px;font-weight:600;color:var(--tinta-suave)}
+  .casilla input{width:100%;padding:7px 9px;border:1px solid var(--linea);border-radius:8px;font-size:15px;
+    font-family:'Barlow',sans-serif;background:var(--panel)}
+  .casilla input:focus{outline:2px solid var(--verde);outline-offset:1px;border-color:var(--verde)}
+  .casilla .sub{font-size:12.5px;color:var(--tinta-suave);margin-top:7px}
+  .casilla .sub strong{color:var(--verde);font-size:14px}
   .fila-campos{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
   .nota{font-size:13px;color:var(--tinta-suave);margin-top:10px;line-height:1.5}
   input.tarifa-celda{width:92px;padding:6px 8px;border:1px solid var(--linea);border-radius:7px;font-size:14px;
@@ -143,6 +155,13 @@
             <option value="extra">Net overtime only</option>
           </select>
         </div>
+        <div>
+          <label for="detalle-reporte">PDF report</label>
+          <select id="detalle-reporte">
+            <option value="resumen">Positions and total only</option>
+            <option value="completo">Add the person-by-person detail</option>
+          </select>
+        </div>
         <button class="btn" onclick="descargarReporte()">⬇ Download PDF report</button>
         <button class="btn suave" onclick="reiniciar()">Start over</button>
       </div>
@@ -151,22 +170,22 @@
     <div class="tarjetas" id="tarjetas"></div>
 
     <section>
-      <h3>Hourly rates</h3>
+      <h3>Hourly rate for each position</h3>
       <div class="panel-tarifas">
-        <div class="fila-campos">
+        <div id="tabla-tarifas"></div>
+        <div id="tarifas-pendientes"></div>
+        <div class="fila-campos" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--linea)">
           <div>
-            <label for="tarifa">Default rate ($/h)</label>
-            <input type="number" id="tarifa" min="0" step="0.5" placeholder="e.g. 12.50" onchange="pintar()">
+            <label for="tarifa">Rate for any position left blank ($/h)</label>
+            <input type="number" id="tarifa" min="0" step="0.5" placeholder="optional" onchange="pintar()">
           </div>
-          <div style="flex:1;min-width:220px">
+          <div style="flex:1;min-width:200px">
             <label>Rates read from your files</label>
             <div id="estado-tarifas" class="chip">No rates detected yet</div>
           </div>
           <button class="btn suave" onclick="limpiarTarifas()">Clear rates</button>
         </div>
-        <div id="tabla-tarifas" style="margin-top:14px"></div>
-        <div id="tarifas-pendientes"></div>
-        <div class="nota">A person is paid at their own rate if one was found; otherwise the rate for their position; otherwise the default. Type in any cell to override it.</div>
+        <div class="nota">Each position is paid at its own rate. If one person needs a different rate, change it in their row under “By person”.</div>
       </div>
     </section>
 
@@ -264,10 +283,11 @@ function horasPagoDe(p){
   if(b === "extra") return Math.max(0, p.ex - p.an);
   return p.trab;
 }
-function etiquetaBase(){
+const etiquetaBase = () => {
   const b = baseHoras();
   return b === "prog" ? "scheduled hours" : b === "extra" ? "net overtime" : "actual hours worked";
-}
+};
+const detalleReporte = () => (document.getElementById("detalle-reporte") || {}).value || "resumen";
 
 /* Guardado local de tarifas, para no volver a escribirlas en cada evento */
 function guardarTarifas(){
@@ -689,12 +709,13 @@ function resumen(){
   }
   const porRol = {};
   for(const p of personas){
-    if(!porRol[p.rol]) porRol[p.rol] = {personas:0, conExtra:0, seFueAntes:0, ex:0, an:0, horas:0, importe:0};
+    if(!porRol[p.rol]) porRol[p.rol] = {personas:0, conExtra:0, seFueAntes:0, ex:0, an:0, horas:0, importe:0, tarifas:new Set()};
     porRol[p.rol].personas += 1;
     if(p.ex > 0) porRol[p.rol].conExtra += 1;
     if(p.an > 0) porRol[p.rol].seFueAntes += 1;
     porRol[p.rol].ex += p.ex; porRol[p.rol].an += p.an;
     porRol[p.rol].horas += p.horasPago; porRol[p.rol].importe += p.importe;
+    if(p.tarifa > 0) porRol[p.rol].tarifas.add(p.tarifa);
   }
   const horasPagar = personas.reduce((s,p)=>s+p.horasPago, 0);
   const totalPagar = personas.reduce((s,p)=>s+p.importe, 0);
@@ -755,7 +776,7 @@ function pintar(){
   const roles = Object.keys(R.porRol);
   document.getElementById("tabla-posiciones").innerHTML = `
     <table><thead><tr>
-      <th>Position</th><th>People</th><th>With overtime</th><th>Left early</th><th>Overtime hours</th><th>Hours left early</th><th>Hours to pay</th><th>To pay ($)</th>
+      <th>Position</th><th>People</th><th>With overtime</th><th>Left early</th><th>Overtime hours</th><th>Hours left early</th><th>Hours to pay</th><th>Rate ($/h)</th><th>To pay ($)</th>
     </tr></thead><tbody>
     ${roles.map(rol => {
       const v = R.porRol[rol];
@@ -767,6 +788,7 @@ function pintar(){
         <td class="${v.ex>0?"n-ambar":"apagado"}">${fmt(v.ex)}</td>
         <td class="${v.an>0?"n-rojo":"apagado"}">${fmt(v.an)}</td>
         <td>${fmt(v.horas)}</td>
+        <td>${textoTarifaRol(v)}</td>
         <td style="font-weight:600">${v.importe>0?fmtDinero(v.importe):"—"}</td>
       </tr>`;
     }).join("")}
@@ -774,7 +796,7 @@ function pintar(){
       <td>TOTAL</td><td>${R.totalPersonas}</td>
       <td>${R.conExtra}</td><td>${R.seFueronAntes}</td>
       <td>${fmt(R.totEx)}</td><td>${fmt(R.totAn)}</td>
-      <td>${fmt(R.horasPagar)}</td><td>${R.totalPagar>0?fmtDinero(R.totalPagar):"—"}</td>
+      <td>${fmt(R.horasPagar)}</td><td></td><td>${R.totalPagar>0?fmtDinero(R.totalPagar):"—"}</td>
     </tr>
     </tbody></table>`;
 
@@ -836,22 +858,24 @@ function pintarTarifas(R){
     : "No rates detected — enter them here";
 
   document.getElementById("tabla-tarifas").innerHTML = `
-    <div class="tabla"><table style="min-width:420px"><thead><tr>
-      <th>Position</th><th>People</th><th>Rate ($/h)</th><th>Source</th>
-    </tr></thead><tbody>
+    <div class="rejilla-tarifas">
     ${roles.map(rol => {
       const valor = tarifaRolDe(rol), puesta = valor > 0;
-      return `<tr>
-        <td><span class="chip">${labelPos(rol)}</span></td>
-        <td>${R.porRol[rol].personas}</td>
-        <td><input type="number" min="0" step="0.5" class="tarifa-celda ${puesta?"":"heredada"}"
-             value="${puesta?valor:""}" placeholder="${tarifa()>0?fmt2(tarifa()):"—"}"
+      const v = R.porRol[rol];
+      return `<div class="casilla ${puesta?"puesta":""}">
+        <div class="puesto">${labelPos(rol)}</div>
+        <div class="gente">${v.personas} ${v.personas===1?"person":"people"} · ${fmt(v.horas)} to pay</div>
+        <div class="campo">
+          <span class="signo">$</span>
+          <input type="number" min="0" step="0.5" inputmode="decimal"
+             value="${puesta?valor:""}" placeholder="${tarifa()>0?fmt2(tarifa()):"rate per hour"}"
              aria-label="Hourly rate for ${labelPos(rol)}"
-             onchange="fijarTarifaRol('${rol}', this.value)"></td>
-        <td class="apagado">${puesta ? "read or set" : tarifa()>0 ? "default rate" : "missing"}</td>
-      </tr>`;
+             onchange="fijarTarifaRol('${rol}', this.value)">
+        </div>
+        <div class="sub">${v.importe>0 ? "Subtotal <strong>"+fmtDinero(v.importe)+"</strong>" : "No rate yet"}</div>
+      </div>`;
     }).join("")}
-    </tbody></table></div>`;
+    </div>`;
 
   const pend = document.getElementById("tarifas-pendientes");
   if(tarifasPendientes.length === 0){ pend.innerHTML = ""; return; }
@@ -871,6 +895,14 @@ function pintarTarifas(R){
 }
 
 const fmt2 = n => (Math.round(n*100)/100).toFixed(2);
+
+/* Texto de la tarifa de un puesto: una sola, varias, o ninguna */
+function textoTarifaRol(v){
+  const ts = Array.from(v.tarifas || []);
+  if(ts.length === 0) return "—";
+  if(ts.length === 1) return fmtDinero(ts[0]);
+  return fmtDinero(Math.min(...ts)) + "–" + fmtDinero(Math.max(...ts));
+}
 
 function fijarTarifaRol(rol, valor){
   const v = parseFloat(valor);
@@ -954,30 +986,46 @@ function descargarReporte(){
   doc.text("By position", mx, y);
   const filasRol = Object.keys(R.porRol).map(rol=>{
     const v = R.porRol[rol];
-    return [labelPos(rol), v.personas, v.conExtra, v.seFueAntes, fmt(v.ex), fmt(v.an),
-      fmt(v.horas), v.importe>0?fmtDinero(v.importe):"—"];
+    return [labelPos(rol), v.personas, fmt(v.horas), textoTarifaRol(v), v.importe>0?fmtDinero(v.importe):"—"];
   });
   filasRol.push([
     {content:"TOTAL", styles:{fontStyle:"bold"}},
     {content:R.totalPersonas, styles:{fontStyle:"bold"}},
-    {content:R.conExtra, styles:{fontStyle:"bold"}},
-    {content:R.seFueronAntes, styles:{fontStyle:"bold"}},
-    {content:fmt(R.totEx), styles:{fontStyle:"bold"}},
-    {content:fmt(R.totAn), styles:{fontStyle:"bold"}},
     {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}},
-    {content:R.totalPagar>0?fmtDinero(R.totalPagar):"—", styles:{fontStyle:"bold"}}
+    "",
+    {content:R.totalPagar>0?fmtDinero(R.totalPagar):"—", styles:{fontStyle:"bold", textColor:[22,96,73]}}
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Position","People","With overtime","Left early","Overtime hours","Hours left early","Hours to pay","To pay ($)"]],
+    head:[["Position","People","Hours to pay","Rate ($/h)","To pay ($)"]],
     body:filasRol,
-    styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
+    styles:{fontSize:10, cellPadding:7}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]},
+    columnStyles:{1:{halign:"right"}, 2:{halign:"right"}, 3:{halign:"right"}, 4:{halign:"right"}}
   });
   y = doc.lastAutoTable.finalY + 22;
 
-  // Por persona
-  if(y > 650){ doc.addPage(); y = 50; }
-  doc.setFontSize(12); doc.setFont("helvetica","bold");
+  // Bloque total
+  if(y > 720){ doc.addPage(); y = 50; }
+  doc.setFillColor(226,239,234);
+  doc.roundedRect(mx, y, 595 - mx*2, 42, 6, 6, "F");
+  doc.setFontSize(11); doc.setTextColor(22,96,73); doc.setFont("helvetica","bold");
+  doc.text(
+    R.totalPagar > 0
+      ? `TOTAL TO PAY: ${fmtDinero(R.totalPagar)}   (${fmt(R.horasPagar)} — ${etiquetaBase()})`
+      : `TOTAL HOURS TO PAY: ${fmt(R.horasPagar)} — ${etiquetaBase()} (no rates set)`,
+    mx + 14, y + 26);
+  doc.setFont("helvetica","normal");
+  y += 42 + 22;
+
+  if(detalleReporte() === "completo") anexoPorPersona(doc, R, mx, y);
+
+  doc.save(`event-report-${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+/* Detalle persona a persona: solo si se pide */
+function anexoPorPersona(doc, R, mx, y){
+  if(y > 620){ doc.addPage(); y = 50; }
+  doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
   doc.text("By person", mx, y);
   const filasPers = R.personas.map(p=>[
     p.nombre, labelPos(p.rol), p.dias, fmt(p.prog), fmt(p.trab),
@@ -998,22 +1046,8 @@ function descargarReporte(){
     body:filasPers,
     styles:{fontSize:8, cellPadding:4}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
   });
-  y = doc.lastAutoTable.finalY + 16;
+  y = doc.lastAutoTable.finalY + 22;
 
-  // Bloque total
-  if(y > 720){ doc.addPage(); y = 50; }
-  doc.setFillColor(226,239,234);
-  doc.roundedRect(mx, y, 595 - mx*2, 42, 6, 6, "F");
-  doc.setFontSize(11); doc.setTextColor(22,96,73); doc.setFont("helvetica","bold");
-  doc.text(
-    R.totalPagar > 0
-      ? `TOTAL TO PAY: ${fmtDinero(R.totalPagar)}   (${fmt(R.horasPagar)} — ${etiquetaBase()})`
-      : `TOTAL HOURS TO PAY: ${fmt(R.horasPagar)} — ${etiquetaBase()} (no rates set)`,
-    mx + 14, y + 26);
-  doc.setFont("helvetica","normal");
-  y += 42 + 22;
-
-  // Registros día a día
   const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
   if(y > 650){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
@@ -1026,8 +1060,6 @@ function descargarReporte(){
       r.extra>0?fmt(r.extra):"—", r.antes>0?fmt(r.antes):"—"]),
     styles:{fontSize:7.5, cellPadding:4}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
   });
-
-  doc.save(`event-report-${new Date().toISOString().slice(0,10)}.pdf`);
 }
 </script>
 </body>
