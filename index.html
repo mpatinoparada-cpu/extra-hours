@@ -142,8 +142,8 @@
         <div>
           <label for="detalle-reporte">PDF report</label>
           <select id="detalle-reporte">
-            <option value="resumen">Positions, people, times and overtime</option>
-            <option value="completo">Also add a day-by-day breakdown</option>
+            <option value="resumen">Positions and overtime only</option>
+            <option value="completo">Add the person-by-person detail</option>
           </select>
         </div>
         <button class="btn" onclick="descargarReporte()">⬇ Download PDF report</button>
@@ -921,7 +921,7 @@ function descargarReporte(){
     startY:y+10, margin:{left:mx,right:mx},
     head:[["Position","People","Overtime","Overtime pay","Hours to pay","Rate ($/h)","To pay ($)"]],
     body:filasRol,
-    styles:{fontSize:9.5, cellPadding:6}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]},
+    styles:{fontSize:10, cellPadding:7.5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]},
     columnStyles:{1:{halign:"right"}, 2:{halign:"right"}, 3:{halign:"right"}, 4:{halign:"right"}, 5:{halign:"right"}, 6:{halign:"right"}}
   });
   y = doc.lastAutoTable.finalY + 22;
@@ -947,8 +947,7 @@ function descargarReporte(){
   doc.setFont("helvetica","normal");
   y += 42 + 22;
 
-  y = anexoPorPersona(doc, R, mx, y);
-  if(detalleReporte() === "completo") anexoHorarios(doc, mx, y);
+  if(detalleReporte() === "completo") anexoPorPersona(doc, R, mx, y);
 
   doc.save(`event-report-${new Date().toISOString().slice(0,10)}.pdf`);
 }
@@ -989,21 +988,6 @@ function anexoPorPersona(doc, R, mx, y){
   return doc.lastAutoTable.finalY + 22;
 }
 
-/* Horarios programados contra reales: solo si se pide */
-function anexoHorarios(doc, mx, y){
-  const orden = registros.slice().sort((a,b)=> a.fecha.localeCompare(b.fecha) || a.nombre.localeCompare(b.nombre));
-  if(y > 640){ doc.addPage(); y = 50; }
-  doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
-  doc.text("Day-by-day detail", mx, y);
-  doc.autoTable({
-    startY:y+10, margin:{left:mx,right:mx},
-    head:[["Name","Position","Sched. In","Sched. Out","Actual In","Actual Out","Sched.","Actual","Overtime","Early"]],
-    body:orden.map(r=>[r.nombre, labelPos(r.rol), r.progIn, r.progOut, r.realIn, r.realOut,
-      fmt(r.prog), fmt(r.trab),
-      r.extra>0?fmt(r.extra):"—", r.antes>0?fmt(r.antes):"—"]),
-    styles:{fontSize:7.5, cellPadding:4}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
-  });
-}
 </script>
 </body>
 </html>
