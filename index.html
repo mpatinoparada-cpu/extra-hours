@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
 <style>
   :root{
     --tinta:#1C2422; --tinta-suave:#5A6460; --papel:#FAFAF7; --panel:#FFFFFF;
@@ -70,6 +71,28 @@
   summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--tinta-suave);padding:6px 0}
   .texto-pdf{background:#F7F9F8;border:1px solid var(--linea);border-radius:9px;padding:10px 12px;
     font-family:monospace;font-size:12.5px;line-height:1.65;white-space:pre-wrap;max-height:300px;overflow:auto;margin-top:8px}
+  /* Lista de archivos cargados */
+  .archivos{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .archivo-chip{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--linea);
+    border-radius:99px;padding:5px 6px 5px 12px;font-size:13px}
+  .archivo-chip .tipo{font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--verde)}
+  .archivo-chip button{border:none;background:#EEF1F0;color:var(--tinta-suave);border-radius:50%;width:22px;height:22px;
+    cursor:pointer;font-size:14px;line-height:1;font-family:inherit}
+  .archivo-chip button:hover{background:#DDE3E0;color:var(--rojo)}
+  /* Panel de tarifas */
+  .panel-tarifas{background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:16px}
+  .fila-campos{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .nota{font-size:13px;color:var(--tinta-suave);margin-top:10px;line-height:1.5}
+  input.tarifa-celda{width:92px;padding:6px 8px;border:1px solid var(--linea);border-radius:7px;font-size:14px;
+    font-family:'Barlow',sans-serif;background:var(--panel)}
+  input.tarifa-celda:focus{outline:2px solid var(--verde);outline-offset:1px}
+  input.tarifa-celda.heredada{color:var(--tinta-suave);background:#F7F9F8}
+  .sin-asignar{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .sin-asignar .pendiente{display:flex;align-items:center;gap:8px;background:var(--ambar-suave);border:1px solid #EBD9B8;
+    border-radius:9px;padding:6px 10px;font-size:13px}
+  .sin-asignar select{padding:5px 7px;font-size:13px;border-radius:7px}
+  .barra-progreso{height:5px;background:#E4EAE7;border-radius:99px;overflow:hidden;margin-top:10px;display:none}
+  .barra-progreso > div{height:100%;background:var(--verde);width:0%;transition:width .2s}
   @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -78,22 +101,25 @@
 
   <header>
     <h1>Event Hours Analyzer</h1>
-    <p>Upload the staff hours PDF and instantly get overtime, early departures, and the total to pay.</p>
+    <p>Upload the staff hours and the rate sheet — PDF, photo or screenshot — and get overtime, early departures and the total to pay.</p>
   </header>
 
-  <div class="zona" id="zona" role="button" tabindex="0" aria-label="Upload PDF"
+  <div class="zona" id="zona" role="button" tabindex="0" aria-label="Upload files"
        onclick="document.getElementById('archivo').click()"
        onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('archivo').click()"
        ondragover="event.preventDefault();this.classList.add('arrastrando')"
        ondragleave="this.classList.remove('arrastrando')"
-       ondrop="event.preventDefault();this.classList.remove('arrastrando');if(event.dataTransfer.files[0])analizar(event.dataTransfer.files[0])">
-    <div class="icono">📄</div>
-    <div class="titulo" id="zona-titulo">Drag the PDF here or click to choose it</div>
-    <div class="sub">The page reads each worker line with scheduled and actual times, and detects the position (Server, Kitchen, Pantry…) automatically.</div>
-    <input type="file" id="archivo" accept=".pdf,application/pdf" style="display:none"
-           onchange="analizar(this.files[0]);this.value=''">
+       ondrop="event.preventDefault();this.classList.remove('arrastrando');analizarArchivos(event.dataTransfer.files)">
+    <div class="icono">📄 🖼️</div>
+    <div class="titulo" id="zona-titulo">Drop the hours PDF and the rate image together</div>
+    <div class="sub">Both at once, in any order. PDFs are read as text; photos, screenshots and scanned pages are read with OCR. Hourly rates found in either file are matched to each position or person — you can correct any of them by hand. You can also paste a screenshot with Ctrl/⌘+V.</div>
+    <input type="file" id="archivo" multiple
+           accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,image/bmp,image/*" style="display:none"
+           onchange="analizarArchivos(this.files);this.value=''">
   </div>
+  <div class="barra-progreso" id="progreso"><div id="progreso-barra"></div></div>
   <div class="msg" id="mensaje" role="status"></div>
+  <div class="archivos" id="lista-archivos"></div>
 
   <div id="resultados">
     <div class="barra">
@@ -110,15 +136,39 @@
           </select>
         </div>
         <div>
-          <label for="tarifa">Hourly rate ($)</label>
-          <input type="number" id="tarifa" min="0" step="0.5" placeholder="e.g. 12.50" oninput="pintar()">
+          <label for="base">Hours to pay</label>
+          <select id="base" onchange="pintar()">
+            <option value="real">Actual hours worked</option>
+            <option value="prog">Scheduled hours</option>
+            <option value="extra">Net overtime only</option>
+          </select>
         </div>
         <button class="btn" onclick="descargarReporte()">⬇ Download PDF report</button>
-        <button class="btn suave" onclick="reiniciar()">Analyze another PDF</button>
+        <button class="btn suave" onclick="reiniciar()">Start over</button>
       </div>
     </div>
 
     <div class="tarjetas" id="tarjetas"></div>
+
+    <section>
+      <h3>Hourly rates</h3>
+      <div class="panel-tarifas">
+        <div class="fila-campos">
+          <div>
+            <label for="tarifa">Default rate ($/h)</label>
+            <input type="number" id="tarifa" min="0" step="0.5" placeholder="e.g. 12.50" onchange="pintar()">
+          </div>
+          <div style="flex:1;min-width:220px">
+            <label>Rates read from your files</label>
+            <div id="estado-tarifas" class="chip">No rates detected yet</div>
+          </div>
+          <button class="btn suave" onclick="limpiarTarifas()">Clear rates</button>
+        </div>
+        <div id="tabla-tarifas" style="margin-top:14px"></div>
+        <div id="tarifas-pendientes"></div>
+        <div class="nota">A person is paid at their own rate if one was found; otherwise the rate for their position; otherwise the default. Type in any cell to override it.</div>
+      </div>
+    </section>
 
     <section>
       <h3>By position</h3>
@@ -136,7 +186,7 @@
     </details>
 
     <details id="detalle-texto">
-      <summary>View all text read from the PDF</summary>
+      <summary>View all text read from your files</summary>
       <div id="texto-completo"></div>
     </details>
   </div>
@@ -169,15 +219,77 @@ const POSICIONES = {
 function labelPos(cod){ return POSICIONES[cod] || cod; }
 
 let registros = [];       // {fecha, nombre, rol, progIn, progOut, realIn, realOut, trab, prog, extra, antes}
-let paginasTexto = [];    // [{numero, lineas:[]}]
+let paginasTexto = [];    // [{numero, lineas:[], archivo, tipo}]
+let documentos = [];      // [{id, nombre, tipo:'pdf'|'img', paginas:[...]}]
 let nombreArchivo = "";
 let infoEvento = {};      // {fecha, numero, nombre, invitados, horario}
+let tarifasRol = {};      // {SERV: 25}
+let tarifasPersona = {};  // {"smith, john": 30}
+let tarifasPendientes = [];// [{etiqueta, valor}] leídas pero sin dueño claro
+let idDoc = 0;
 
 /* ---------- Utilidades ---------- */
 const fmt = n => (Math.round(n*100)/100).toLocaleString("en-US", {maximumFractionDigits:2}) + " h";
 const fmtDinero = n => "$" + (Math.round(n*100)/100).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
 const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const tarifa = () => parseFloat(document.getElementById("tarifa").value) || 0;
+const baseHoras = () => (document.getElementById("base") || {}).value || "real";
+
+/* Clave estable para un nombre: minúsculas, sin comas ni acentos, tokens ordenados */
+function clavePersona(nombre){
+  return String(nombre).normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/).filter(t=>t.length>1).sort().join(" ");
+}
+/* Tarifa de un puesto, aceptando códigos que significan lo mismo (PANT y PANTRY) */
+function tarifaRolDe(rol){
+  if(tarifasRol[rol] > 0) return tarifasRol[rol];
+  const etiqueta = labelPos(rol);
+  for(const k in tarifasRol){
+    if(tarifasRol[k] > 0 && labelPos(k) === etiqueta) return tarifasRol[k];
+  }
+  return 0;
+}
+/* Tarifa que aplica a una persona: propia → de su posición → por defecto */
+function tarifaDe(persona){
+  const k = clavePersona(persona.nombre);
+  if(tarifasPersona[k] > 0) return {valor: tarifasPersona[k], origen:"person"};
+  const tr = tarifaRolDe(persona.rol);
+  if(tr > 0) return {valor: tr, origen:"position"};
+  return {valor: tarifa(), origen: tarifa() > 0 ? "default" : "none"};
+}
+/* Horas que se pagan a una persona según la base elegida */
+function horasPagoDe(p){
+  const b = baseHoras();
+  if(b === "prog") return p.prog;
+  if(b === "extra") return Math.max(0, p.ex - p.an);
+  return p.trab;
+}
+function etiquetaBase(){
+  const b = baseHoras();
+  return b === "prog" ? "scheduled hours" : b === "extra" ? "net overtime" : "actual hours worked";
+}
+
+/* Guardado local de tarifas, para no volver a escribirlas en cada evento */
+function guardarTarifas(){
+  try{
+    localStorage.setItem("eha-tarifas", JSON.stringify({
+      rol: tarifasRol, persona: tarifasPersona, defecto: document.getElementById("tarifa").value
+    }));
+  }catch(e){ /* almacenamiento no disponible: seguimos sin guardar */ }
+}
+function cargarTarifas(){
+  try{
+    const g = JSON.parse(localStorage.getItem("eha-tarifas") || "null");
+    if(!g) return;
+    tarifasRol = g.rol || {}; tarifasPersona = g.persona || {};
+    if(g.defecto) document.getElementById("tarifa").value = g.defecto;
+  }catch(e){ /* sin almacenamiento */ }
+}
+function limpiarTarifas(){
+  tarifasRol = {}; tarifasPersona = {}; tarifasPendientes = [];
+  document.getElementById("tarifa").value = "";
+  guardarTarifas(); pintar();
+}
 
 function mensaje(t, tipo){
   const m = document.getElementById("mensaje");
@@ -207,9 +319,176 @@ async function leerPDF(file){
   for(let p = 1; p <= pdf.numPages; p++){
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    paginas.push({numero: p, lineas: lineasDePagina(content.items)});
+    let lineas = lineasDePagina(content.items);
+    // Página sin texto = escaneada: la dibujamos y la leemos con OCR
+    if(lineas.length === 0){
+      progreso(`Page ${p} has no text — reading it as an image…`);
+      const canvas = await renderizarPagina(page, 2.2);
+      lineas = await ocrDeCanvas(canvas);
+    }
+    paginas.push({numero: p, lineas});
   }
   return paginas;
+}
+
+async function renderizarPagina(page, escala){
+  const vp = page.getViewport({scale: escala});
+  const canvas = document.createElement("canvas");
+  canvas.width = vp.width; canvas.height = vp.height;
+  await page.render({canvasContext: canvas.getContext("2d"), viewport: vp}).promise;
+  return canvas;
+}
+
+/* ---------- Lectura de imágenes (OCR) ---------- */
+let trabajadorOCR = null;
+async function obtenerOCR(){
+  if(trabajadorOCR) return trabajadorOCR;
+  if(typeof Tesseract === "undefined") throw new Error("the OCR library did not load — check the internet connection");
+  trabajadorOCR = await Tesseract.createWorker("eng", 1, {
+    logger: m => { if(m.status === "recognizing text") progreso("Reading the image… " + Math.round(m.progress*100) + "%", m.progress); }
+  });
+  return trabajadorOCR;
+}
+
+/* Convierte el resultado del OCR en líneas, respetando columnas por posición */
+function lineasDeOCR(data){
+  if(data.lines && data.lines.length){
+    return data.lines.map(l => l.text.replace(/\s+/g," ").trim()).filter(t => t.length > 0);
+  }
+  return (data.text || "").split("\n").map(t => t.replace(/\s+/g," ").trim()).filter(t => t.length > 0);
+}
+
+async function ocrDeCanvas(canvas){
+  const w = await obtenerOCR();
+  const { data } = await w.recognize(canvas);
+  return lineasDeOCR(data);
+}
+
+/* Las fotos pequeñas se agrandan; mejora bastante el reconocimiento */
+async function prepararImagen(file){
+  const url = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((res, rej)=>{
+      const i = new Image();
+      i.onload = ()=>res(i); i.onerror = ()=>rej(new Error("the image could not be opened"));
+      i.src = url;
+    });
+    const objetivo = 1800;
+    const escala = Math.min(3, Math.max(1, objetivo / Math.max(img.width, img.height)));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width*escala); canvas.height = Math.round(img.height*escala);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    // Escala de grises con más contraste
+    const d = ctx.getImageData(0,0,canvas.width,canvas.height);
+    for(let i=0;i<d.data.length;i+=4){
+      const g = 0.299*d.data[i] + 0.587*d.data[i+1] + 0.114*d.data[i+2];
+      const c = Math.max(0, Math.min(255, (g - 128)*1.35 + 128));
+      d.data[i] = d.data[i+1] = d.data[i+2] = c;
+    }
+    ctx.putImageData(d, 0, 0);
+    return canvas;
+  } finally { URL.revokeObjectURL(url); }
+}
+
+async function leerImagen(file){
+  const canvas = await prepararImagen(file);
+  const lineas = await ocrDeCanvas(canvas);
+  return [{numero: 1, lineas}];
+}
+
+/* ---------- Tarifas encontradas en el texto ---------- */
+const RE_HORA_SUELTA = /\d{1,2}:\d{2}/;
+
+/* Devuelve el último importe plausible de una línea: "$25.00", "25.00/hr", "Rate 25" */
+const RE_NO_ES_TARIFA = /\b(total|subtotal|invoice|balance|deposit|tax|gratuity|guests?|page|phone|zip|suite|ste)\b/i;
+function importeDeLinea(linea){
+  if(RE_NO_ES_TARIFA.test(linea)) return null;
+  const re = /(\$)?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*(\/\s*(?:hr|hour|h)\b|per\s*hour)?/gi;
+  let m, ultimo = null;
+  while((m = re.exec(linea)) !== null){
+    if(m[2] === undefined) continue;
+    const inicio = m.index + m[0].indexOf(m[2]);
+    const fin = inicio + m[2].length;
+    const antes = linea.slice(0, inicio);
+    const despues = linea.slice(fin);
+    if(/[\d.,%\/\-]$/.test(antes)) continue;          // parte de otro número, fecha o código
+    if(/^[\d%]/.test(despues)) continue;               // el número sigue más allá
+    if(/^\s*[\/\-]\s*\d/.test(despues)) continue;      // fecha tipo 05/10
+    const v = parseFloat(m[2].replace(/,/g, ""));
+    if(!(v >= 4 && v <= 500)) continue;                // fuera del rango de una tarifa por hora
+    ultimo = {valor: v, indice: inicio - (m[1] ? 1 : 0), texto: m[0].trim(), fuerte: !!(m[1] || m[3])};
+  }
+  return ultimo;
+}
+
+function normalizarEtiqueta(t){
+  return t.replace(/[.·•_\-–—:]+/g, " ").replace(/\b(rate|rates|hourly|per hour|hr|hour|pay|cost|price|usd)\b/gi, " ")
+    .replace(/\s+/g," ").trim();
+}
+function clavePos(t){ return t.toUpperCase().replace(/[^A-Z\/]/g,""); }
+
+/* Busca en TODAS las líneas leídas (PDF o imagen) pares "puesto/persona → tarifa" */
+function extraerTarifas(lineas, nombresConocidos){
+  const encontradas = {rol:{}, persona:{}, pendientes:[]};
+  const porCodigo = {};                 // SERVER → SERV
+  Object.keys(POSICIONES).forEach(cod=>{
+    porCodigo[clavePos(cod)] = cod;
+    porCodigo[clavePos(POSICIONES[cod])] = cod;
+  });
+  const porNombre = {};
+  nombresConocidos.forEach(n => { porNombre[clavePersona(n)] = n; });
+
+  for(const cruda of lineas){
+    const linea = cruda.trim();
+    if(!linea || RE_TRABAJADOR.test(linea)) continue;   // filas de horarios, no de tarifas
+    if(RE_HORA_SUELTA.test(linea)) continue;            // líneas con horas
+    // Una fila con muchos números suele ser una tabla de horas, no una tarifa
+    if(!/\$/.test(linea) && (linea.match(/\d+(?:\.\d+)?/g) || []).length >= 3) continue;
+    const imp = importeDeLinea(linea);
+    if(!imp) continue;
+    const etiqueta = normalizarEtiqueta(linea.slice(0, imp.indice));
+    if(!etiqueta || etiqueta.length < 2) continue;
+
+    // ¿Es un puesto?
+    const cp = clavePos(etiqueta);
+    let cod = porCodigo[cp];
+    if(!cod && cp.length >= 3 && cp.length <= 12){
+      const parcial = Object.keys(porCodigo).find(k => k.length >= 3 && (cp.includes(k) || k.includes(cp)));
+      if(parcial) cod = porCodigo[parcial];
+    }
+    if(cod){ encontradas.rol[cod] = imp.valor; continue; }
+
+    // ¿Es una persona de la lista de horas?
+    const kp = clavePersona(etiqueta);
+    if(kp && porNombre[kp]){ encontradas.persona[kp] = imp.valor; continue; }
+    const casi = kp ? Object.keys(porNombre).find(k=>{
+      const a = k.split(" "), b = kp.split(" ");
+      if(b.length === 0) return false;
+      return b.every(t => a.includes(t)) || a.every(t => b.includes(t));
+    }) : null;
+    if(casi){ encontradas.persona[casi] = imp.valor; continue; }
+
+    // Sin dueño claro: solo lo proponemos si de verdad parece dinero
+    if(!imp.fuerte && !/rate|hourly|per hour|pay/i.test(linea)) continue;
+    encontradas.pendientes.push({etiqueta: etiqueta.slice(0,40), valor: imp.valor});
+  }
+  return encontradas;
+}
+
+function aplicarTarifasLeidas(){
+  const nombres = registros.map(r=>r.nombre);
+  const t = extraerTarifas(paginasTexto.flatMap(p=>p.lineas), nombres);
+  Object.assign(tarifasRol, t.rol);
+  Object.assign(tarifasPersona, t.persona);
+  // Sin duplicados y sin las que ya están asignadas
+  const vistas = new Set();
+  tarifasPendientes = t.pendientes.filter(p=>{
+    const k = p.etiqueta.toLowerCase() + "|" + p.valor;
+    if(vistas.has(k)) return false;
+    vistas.add(k); return true;
+  }).slice(0, 12);
+  return Object.keys(t.rol).length + Object.keys(t.persona).length;
 }
 
 /* ---------- Interpretación de las líneas ---------- */
@@ -298,57 +577,128 @@ function reinterpretar(){
 }
 
 /* ---------- Flujo principal ---------- */
-async function analizar(file){
-  if(!file) return;
-  if(!/\.pdf$/i.test(file.name) && file.type !== "application/pdf"){
-    mensaje("The file must be a PDF.", "err"); return;
-  }
+const TITULO_ZONA = "Drop the hours PDF and the rate image together";
+
+function progreso(texto, fraccion){
+  const barra = document.getElementById("progreso");
+  if(texto === null){ barra.style.display = "none"; return; }
+  barra.style.display = "block";
+  document.getElementById("progreso-barra").style.width = Math.round((fraccion || 0)*100) + "%";
+  if(texto) mensaje(texto, "");
+}
+
+function esImagen(file){
+  return /^image\//.test(file.type) || /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i.test(file.name);
+}
+function esPDF(file){
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+}
+
+async function analizarArchivos(lista){
+  const archivos = Array.from(lista || []).filter(f => esPDF(f) || esImagen(f));
+  if(archivos.length === 0){ mensaje("Only PDF files and images can be read.", "err"); return; }
+
   const titulo = document.getElementById("zona-titulo");
-  titulo.innerHTML = '<span class="spinner"></span>Reading the PDF…';
-  mensaje("");
+  const nuevos = [];
   try{
-    paginasTexto = await leerPDF(file);
-    registros = interpretar(paginasTexto.flatMap(p => p.lineas));
-    nombreArchivo = file.name;
-    if(registros.length === 0){
-      mensaje("No workers with their 4 times (Call In/Out and Actual In/Out) were recognized. Open \"View all text read from the PDF\" below to check how the content came through.", "err");
-    } else {
-      mensaje(registros.length + " workers read successfully.", "ok");
+    for(let i = 0; i < archivos.length; i++){
+      const file = archivos[i];
+      const tipo = esPDF(file) ? "pdf" : "img";
+      titulo.innerHTML = '<span class="spinner"></span>Reading ' + esc(file.name) + ' (' + (i+1) + ' of ' + archivos.length + ')…';
+      progreso("Reading " + file.name + "…", i/archivos.length);
+      const paginas = tipo === "pdf" ? await leerPDF(file) : await leerImagen(file);
+      nuevos.push({id: ++idDoc, nombre: file.name, tipo, paginas});
     }
-    const ev = [];
-    if(infoEvento.numero) ev.push("ID " + infoEvento.numero);
-    if(infoEvento.fecha) ev.push(infoEvento.fecha);
-    if(infoEvento.direccion) ev.push(infoEvento.direccion);
-    document.getElementById("nombre-archivo").textContent =
-      nombreArchivo + (ev.length ? " · " + ev.join(" · ") : "");
+    documentos = documentos.concat(nuevos);
+    recalcularTodo();
+
+    const leidos = nuevos.map(d=>d.nombre).join(", ");
+    if(registros.length === 0){
+      mensaje("Read " + leidos + ", but no worker line with its 4 times (Call In/Out and Actual In/Out) was recognized. Open \"View all text read from your files\" below to see how the content came through.", "err");
+    } else {
+      const nt = Object.keys(tarifasRol).length + Object.keys(tarifasPersona).length;
+      mensaje(registros.length + " workers read · " + (nt > 0 ? nt + " rates detected" : "no rates detected — enter them below") + ".", "ok");
+    }
     document.getElementById("resultados").style.display = "block";
-    pintar();
     document.getElementById("resultados").scrollIntoView({behavior:"smooth", block:"start"});
   }catch(e){
-    mensaje("Could not read the PDF: " + e.message, "err");
+    mensaje("Could not read the files: " + e.message, "err");
   }finally{
-    titulo.textContent = "Drag the PDF here or click to choose it";
+    titulo.textContent = TITULO_ZONA;
+    progreso(null);
   }
 }
+
+/* Vuelve a interpretar todo lo cargado (horas + tarifas) */
+function recalcularTodo(){
+  paginasTexto = [];
+  documentos.forEach(d => d.paginas.forEach(pg =>
+    paginasTexto.push({numero: pg.numero, lineas: pg.lineas, archivo: d.nombre, tipo: d.tipo})));
+  registros = interpretar(paginasTexto.flatMap(p => p.lineas));
+  aplicarTarifasLeidas();
+  nombreArchivo = documentos.map(d=>d.nombre).join(" + ");
+  const ev = [];
+  if(infoEvento.numero) ev.push("ID " + infoEvento.numero);
+  if(infoEvento.fecha) ev.push(infoEvento.fecha);
+  if(infoEvento.direccion) ev.push(infoEvento.direccion);
+  document.getElementById("nombre-archivo").textContent =
+    nombreArchivo + (ev.length ? " · " + ev.join(" · ") : "");
+  pintarArchivos();
+  guardarTarifas();
+  pintar();
+}
+
+function quitarDocumento(id){
+  documentos = documentos.filter(d => d.id !== id);
+  if(documentos.length === 0){ reiniciar(); return; }
+  recalcularTodo();
+}
+
+function pintarArchivos(){
+  document.getElementById("lista-archivos").innerHTML = documentos.map(d => `
+    <span class="archivo-chip">
+      <span class="tipo">${d.tipo === "pdf" ? "PDF" : "IMAGE"}</span>
+      <span>${esc(d.nombre)}</span>
+      <button type="button" title="Remove this file" aria-label="Remove ${esc(d.nombre)}"
+              onclick="quitarDocumento(${d.id})">×</button>
+    </span>`).join("");
+}
+
+/* Pegar una captura de pantalla directamente */
+window.addEventListener("paste", ev => {
+  const imgs = Array.from(ev.clipboardData ? ev.clipboardData.files : []).filter(esImagen);
+  if(imgs.length) analizarArchivos(imgs);
+});
 
 function resumen(){
   const porPersona = {};
   for(const r of registros){
     const k = r.nombre.toLowerCase();
-    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, an:0, trab:0, dias:0};
+    if(!porPersona[k]) porPersona[k] = {nombre:r.nombre, rol:r.rol, ex:0, an:0, trab:0, prog:0, dias:0};
     porPersona[k].ex += r.extra; porPersona[k].an += r.antes;
-    porPersona[k].trab += r.trab; porPersona[k].dias += 1; porPersona[k].rol = r.rol;
+    porPersona[k].trab += r.trab; porPersona[k].prog += r.prog;
+    porPersona[k].dias += 1; porPersona[k].rol = r.rol;
   }
   const personas = Object.values(porPersona).sort((a,b)=>b.ex-a.ex);
+  // Tarifa, horas pagables e importe de cada persona
+  for(const p of personas){
+    const t = tarifaDe(p);
+    p.tarifa = t.valor; p.origenTarifa = t.origen;
+    p.horasPago = horasPagoDe(p);
+    p.importe = p.horasPago * p.tarifa;
+  }
   const porRol = {};
   for(const p of personas){
-    if(!porRol[p.rol]) porRol[p.rol] = {personas:0, conExtra:0, seFueAntes:0, ex:0, an:0};
+    if(!porRol[p.rol]) porRol[p.rol] = {personas:0, conExtra:0, seFueAntes:0, ex:0, an:0, horas:0, importe:0};
     porRol[p.rol].personas += 1;
     if(p.ex > 0) porRol[p.rol].conExtra += 1;
     if(p.an > 0) porRol[p.rol].seFueAntes += 1;
     porRol[p.rol].ex += p.ex; porRol[p.rol].an += p.an;
+    porRol[p.rol].horas += p.horasPago; porRol[p.rol].importe += p.importe;
   }
-  const horasPagar = personas.reduce((s,p)=>s+Math.max(0, p.ex - p.an), 0);
+  const horasPagar = personas.reduce((s,p)=>s+p.horasPago, 0);
+  const totalPagar = personas.reduce((s,p)=>s+p.importe, 0);
+  const sinTarifa  = personas.filter(p=>p.tarifa <= 0).length;
   return {
     personas, porRol,
     totalPersonas: personas.length,
@@ -356,7 +706,10 @@ function resumen(){
     seFueronAntes: personas.filter(p=>p.an>0).length,
     totEx: personas.reduce((s,p)=>s+p.ex,0),
     totAn: personas.reduce((s,p)=>s+p.an,0),
-    horasPagar
+    totTrab: personas.reduce((s,p)=>s+p.trab,0),
+    netoExtra: personas.reduce((s,p)=>s+Math.max(0, p.ex - p.an), 0),
+    costoExtra: personas.reduce((s,p)=>s+Math.max(0, p.ex - p.an)*p.tarifa, 0),
+    horasPagar, totalPagar, sinTarifa
   };
 }
 
@@ -366,17 +719,18 @@ function pintar(){
     document.getElementById("tabla-posiciones").innerHTML = "";
     document.getElementById("tabla-personas").innerHTML = "";
     document.getElementById("tabla-registros").innerHTML = "";
+    document.getElementById("tabla-tarifas").innerHTML = "";
+    document.getElementById("tarifas-pendientes").innerHTML = "";
     pintarTexto();
     return;
   }
   const R = resumen();
-  const t = tarifa();
 
   document.getElementById("tarjetas").innerHTML = `
     <div class="tarjeta t-ambar">
       <div class="etq">With overtime</div>
       <div class="num">${R.conExtra}</div>
-      <div class="det">${R.conExtra===1?"person":"people"} · ${fmt(R.totEx)} total</div>
+      <div class="det">${R.conExtra===1?"person":"people"} · ${fmt(R.totEx)} total · ${fmtDinero(R.costoExtra)}</div>
     </div>
     <div class="tarjeta t-rojo">
       <div class="etq">Left early</div>
@@ -386,18 +740,22 @@ function pintar(){
     <div class="tarjeta t-verde">
       <div class="etq">Hours to pay</div>
       <div class="num">${fmt(R.horasPagar)}</div>
-      <div class="det">Overtime minus early departures, per person</div>
+      <div class="det">Counting ${etiquetaBase()}</div>
     </div>
     <div class="tarjeta t-verde">
       <div class="etq">Total to pay</div>
-      <div class="num">${t>0 ? fmtDinero(R.horasPagar*t) : "—"}</div>
-      <div class="det">${t>0 ? "at " + fmtDinero(t) + " per hour" : "Enter the hourly rate above"}</div>
+      <div class="num">${R.totalPagar > 0 ? fmtDinero(R.totalPagar) : "—"}</div>
+      <div class="det">${R.sinTarifa > 0
+        ? R.sinTarifa + (R.sinTarifa===1?" person has":" people have") + " no rate yet"
+        : R.totalPersonas + " people, each at their own rate"}</div>
     </div>`;
+
+  pintarTarifas(R);
 
   const roles = Object.keys(R.porRol);
   document.getElementById("tabla-posiciones").innerHTML = `
     <table><thead><tr>
-      <th>Position</th><th>People</th><th>With overtime</th><th>Left early</th><th>Overtime hours</th><th>Hours left early</th>
+      <th>Position</th><th>People</th><th>With overtime</th><th>Left early</th><th>Overtime hours</th><th>Hours left early</th><th>Hours to pay</th><th>To pay ($)</th>
     </tr></thead><tbody>
     ${roles.map(rol => {
       const v = R.porRol[rol];
@@ -408,37 +766,44 @@ function pintar(){
         <td class="${v.seFueAntes>0?"n-rojo":"apagado"}">${v.seFueAntes}</td>
         <td class="${v.ex>0?"n-ambar":"apagado"}">${fmt(v.ex)}</td>
         <td class="${v.an>0?"n-rojo":"apagado"}">${fmt(v.an)}</td>
+        <td>${fmt(v.horas)}</td>
+        <td style="font-weight:600">${v.importe>0?fmtDinero(v.importe):"—"}</td>
       </tr>`;
     }).join("")}
     <tr class="fila-total">
       <td>TOTAL</td><td>${R.totalPersonas}</td>
       <td>${R.conExtra}</td><td>${R.seFueronAntes}</td>
       <td>${fmt(R.totEx)}</td><td>${fmt(R.totAn)}</td>
+      <td>${fmt(R.horasPagar)}</td><td>${R.totalPagar>0?fmtDinero(R.totalPagar):"—"}</td>
     </tr>
     </tbody></table>`;
 
   document.getElementById("tabla-personas").innerHTML = `
     <table><thead><tr>
-      <th>Name</th><th>Position</th><th>Days</th><th>Worked</th><th>Overtime</th><th>Left early</th><th>Hours to pay</th><th>To pay ($)</th>
+      <th>Name</th><th>Position</th><th>Days</th><th>Scheduled</th><th>Worked</th><th>Overtime</th><th>Left early</th>
+      <th>Hours to pay</th><th>Rate ($/h)</th><th>To pay ($)</th>
     </tr></thead><tbody>
-    ${R.personas.map(p => {
-      const hp = Math.max(0, p.ex - p.an);
-      return `<tr>
+    ${R.personas.map(p => `<tr>
         <td style="font-weight:600">${esc(p.nombre)}</td>
         <td><span class="chip">${labelPos(p.rol)}</span></td>
         <td>${p.dias}</td>
+        <td>${fmt(p.prog)}</td>
         <td>${fmt(p.trab)}</td>
         <td class="${p.ex>0?"n-ambar":"apagado"}">${p.ex>0?fmt(p.ex):"—"}</td>
         <td class="${p.an>0?"n-rojo":"apagado"}">${p.an>0?fmt(p.an):"—"}</td>
-        <td class="${hp>0?"n-verde":"apagado"}">${fmt(hp)}</td>
-        <td style="font-weight:600">${t>0 ? fmtDinero(hp*t) : "—"}</td>
-      </tr>`;
-    }).join("")}
+        <td class="${p.horasPago>0?"n-verde":"apagado"}">${fmt(p.horasPago)}</td>
+        <td><input type="number" min="0" step="0.5" class="tarifa-celda ${p.origenTarifa==="person"?"":"heredada"}"
+             value="${p.tarifa>0?p.tarifa:""}" placeholder="${p.origenTarifa==="none"?"—":"inherited"}"
+             title="${p.origenTarifa==="person"?"Rate for this person":p.origenTarifa==="position"?"From the "+labelPos(p.rol)+" rate":"Default rate"}"
+             aria-label="Hourly rate for ${esc(p.nombre)}"
+             onchange="fijarTarifaPersona('${clavePersona(p.nombre)}', this.value)"></td>
+        <td style="font-weight:600">${p.importe>0 ? fmtDinero(p.importe) : "—"}</td>
+      </tr>`).join("")}
     <tr class="fila-total">
-      <td>TOTAL</td><td></td><td></td><td></td>
+      <td>TOTAL</td><td></td><td></td><td></td><td>${fmt(R.totTrab)}</td>
       <td>${fmt(R.totEx)}</td><td>${fmt(R.totAn)}</td>
-      <td>${fmt(R.horasPagar)}</td>
-      <td>${t>0 ? fmtDinero(R.horasPagar*t) : "—"}</td>
+      <td>${fmt(R.horasPagar)}</td><td></td>
+      <td>${R.totalPagar>0 ? fmtDinero(R.totalPagar) : "—"}</td>
     </tr>
     </tbody></table>`;
 
@@ -461,26 +826,93 @@ function pintar(){
   pintarTexto();
 }
 
+/* ---------- Panel de tarifas ---------- */
+function pintarTarifas(R){
+  const roles = Object.keys(R.porRol);
+  const detectadas = Object.keys(tarifasRol).length + Object.keys(tarifasPersona).length;
+  const estado = document.getElementById("estado-tarifas");
+  estado.textContent = detectadas > 0
+    ? detectadas + (detectadas===1 ? " rate read from your files" : " rates read from your files")
+    : "No rates detected — enter them here";
+
+  document.getElementById("tabla-tarifas").innerHTML = `
+    <div class="tabla"><table style="min-width:420px"><thead><tr>
+      <th>Position</th><th>People</th><th>Rate ($/h)</th><th>Source</th>
+    </tr></thead><tbody>
+    ${roles.map(rol => {
+      const valor = tarifaRolDe(rol), puesta = valor > 0;
+      return `<tr>
+        <td><span class="chip">${labelPos(rol)}</span></td>
+        <td>${R.porRol[rol].personas}</td>
+        <td><input type="number" min="0" step="0.5" class="tarifa-celda ${puesta?"":"heredada"}"
+             value="${puesta?valor:""}" placeholder="${tarifa()>0?fmt2(tarifa()):"—"}"
+             aria-label="Hourly rate for ${labelPos(rol)}"
+             onchange="fijarTarifaRol('${rol}', this.value)"></td>
+        <td class="apagado">${puesta ? "read or set" : tarifa()>0 ? "default rate" : "missing"}</td>
+      </tr>`;
+    }).join("")}
+    </tbody></table></div>`;
+
+  const pend = document.getElementById("tarifas-pendientes");
+  if(tarifasPendientes.length === 0){ pend.innerHTML = ""; return; }
+  const opciones = [`<option value="">Assign to…</option>`]
+    .concat(roles.map(r=>`<option value="rol:${r}">${labelPos(r)}</option>`))
+    .concat(R.personas.map(p=>`<option value="per:${clavePersona(p.nombre)}">${esc(p.nombre)}</option>`))
+    .join("");
+  pend.innerHTML = `
+    <div class="nota" style="margin-top:14px;font-weight:600;color:var(--tinta)">Amounts found without a clear owner</div>
+    <div class="sin-asignar">
+      ${tarifasPendientes.map((p,i)=>`
+        <span class="pendiente">
+          <span>${esc(p.etiqueta)} → <strong>${fmtDinero(p.valor)}</strong></span>
+          <select onchange="asignarPendiente(${i}, this.value)">${opciones}</select>
+        </span>`).join("")}
+    </div>`;
+}
+
+const fmt2 = n => (Math.round(n*100)/100).toFixed(2);
+
+function fijarTarifaRol(rol, valor){
+  const v = parseFloat(valor);
+  if(v > 0) tarifasRol[rol] = v; else delete tarifasRol[rol];
+  guardarTarifas(); pintar();
+}
+function fijarTarifaPersona(clave, valor){
+  const v = parseFloat(valor);
+  if(v > 0) tarifasPersona[clave] = v; else delete tarifasPersona[clave];
+  guardarTarifas(); pintar();
+}
+function asignarPendiente(indice, destino){
+  const p = tarifasPendientes[indice];
+  if(!p || !destino) return;
+  const [tipo, clave] = destino.split(":");
+  if(tipo === "rol") tarifasRol[clave] = p.valor; else tarifasPersona[clave] = p.valor;
+  tarifasPendientes.splice(indice, 1);
+  guardarTarifas(); pintar();
+}
+
 function pintarTexto(){
   document.getElementById("texto-completo").innerHTML = paginasTexto.map(pg => `
-    <div style="font-weight:600;font-size:13.5px;margin-top:10px">Page ${pg.numero} · ${pg.lineas.length} lines</div>
-    <div class="texto-pdf">${pg.lineas.map(esc).join("\n") || "(no extractable text — this may be a scanned image)"}</div>
+    <div style="font-weight:600;font-size:13.5px;margin-top:10px">${esc(pg.archivo || "")}${pg.tipo==="pdf" ? " · page " + pg.numero : ""} · ${pg.lineas.length} lines</div>
+    <div class="texto-pdf">${pg.lineas.map(esc).join("\n") || "(nothing readable here — try a sharper photo or a bigger screenshot)"}</div>
   `).join("");
 }
 
 function reiniciar(){
-  registros = []; paginasTexto = []; nombreArchivo = "";
+  registros = []; paginasTexto = []; documentos = []; nombreArchivo = ""; tarifasPendientes = [];
   document.getElementById("resultados").style.display = "none";
+  document.getElementById("lista-archivos").innerHTML = "";
   mensaje("");
   window.scrollTo({top:0, behavior:"smooth"});
 }
+
+/* Las tarifas guardadas vuelven a estar listas al abrir la página */
+cargarTarifas();
 
 /* ---------- Reporte PDF ---------- */
 function descargarReporte(){
   if(registros.length === 0){ mensaje("No data to export.", "err"); return; }
   const R = resumen();
-  const t = tarifa();
-
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"a4" });
   const mx = 40;
@@ -492,14 +924,17 @@ function descargarReporte(){
   if(infoEvento.numero){ doc.text(`Event ID: ${infoEvento.numero}`, mx, y); y += 15; }
   if(infoEvento.fecha){ doc.text(`Event date: ${infoEvento.fecha}`, mx, y); y += 15; }
   if(infoEvento.direccion){ doc.text(`Address: ${infoEvento.direccion}`, mx, y); y += 15; }
+  if(nombreArchivo){ doc.text(doc.splitTextToSize(`Source files: ${nombreArchivo}`, 595 - mx*2), mx, y); y += 15; }
+  doc.text(`Paying ${etiquetaBase()}`, mx, y); y += 15;
   y += 10;
 
   const cardW = (595 - mx*2 - 30) / 4;
   const tarjetas = [
     {etq:"WITH OVERTIME", val:`${R.conExtra} ppl.`, sub:fmt(R.totEx), color:[185,116,22]},
     {etq:"LEFT EARLY", val:`${R.seFueronAntes} ppl.`, sub:fmt(R.totAn), color:[178,59,42]},
-    {etq:"HOURS TO PAY", val:fmt(R.horasPagar), sub:"net per person", color:[22,96,73]},
-    {etq:"TOTAL TO PAY", val:t>0?fmtDinero(R.horasPagar*t):"—", sub:t>0?`at ${fmtDinero(t)}/h`:"no rate set", color:[22,96,73]}
+    {etq:"HOURS TO PAY", val:fmt(R.horasPagar), sub:etiquetaBase(), color:[22,96,73]},
+    {etq:"TOTAL TO PAY", val:R.totalPagar>0?fmtDinero(R.totalPagar):"—",
+     sub:R.sinTarifa>0?`${R.sinTarifa} without rate`:"all rates set", color:[22,96,73]}
   ];
   tarjetas.forEach((c,i)=>{
     const x = mx + i*(cardW+10);
@@ -519,7 +954,8 @@ function descargarReporte(){
   doc.text("By position", mx, y);
   const filasRol = Object.keys(R.porRol).map(rol=>{
     const v = R.porRol[rol];
-    return [labelPos(rol), v.personas, v.conExtra, v.seFueAntes, fmt(v.ex), fmt(v.an)];
+    return [labelPos(rol), v.personas, v.conExtra, v.seFueAntes, fmt(v.ex), fmt(v.an),
+      fmt(v.horas), v.importe>0?fmtDinero(v.importe):"—"];
   });
   filasRol.push([
     {content:"TOTAL", styles:{fontStyle:"bold"}},
@@ -527,13 +963,15 @@ function descargarReporte(){
     {content:R.conExtra, styles:{fontStyle:"bold"}},
     {content:R.seFueronAntes, styles:{fontStyle:"bold"}},
     {content:fmt(R.totEx), styles:{fontStyle:"bold"}},
-    {content:fmt(R.totAn), styles:{fontStyle:"bold"}}
+    {content:fmt(R.totAn), styles:{fontStyle:"bold"}},
+    {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}},
+    {content:R.totalPagar>0?fmtDinero(R.totalPagar):"—", styles:{fontStyle:"bold"}}
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Position","People","With overtime","Left early","Overtime hours","Hours left early"]],
+    head:[["Position","People","With overtime","Left early","Overtime hours","Hours left early","Hours to pay","To pay ($)"]],
     body:filasRol,
-    styles:{fontSize:9, cellPadding:6}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
+    styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
   });
   y = doc.lastAutoTable.finalY + 22;
 
@@ -541,23 +979,24 @@ function descargarReporte(){
   if(y > 650){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setFont("helvetica","bold");
   doc.text("By person", mx, y);
-  const filasPers = R.personas.map(p=>{
-    const hp = Math.max(0, p.ex - p.an);
-    return [p.nombre, labelPos(p.rol), p.dias, fmt(p.trab),
-      p.ex>0?fmt(p.ex):"—", p.an>0?fmt(p.an):"—", fmt(hp), t>0?fmtDinero(hp*t):"—"];
-  });
+  const filasPers = R.personas.map(p=>[
+    p.nombre, labelPos(p.rol), p.dias, fmt(p.prog), fmt(p.trab),
+    p.ex>0?fmt(p.ex):"—", p.an>0?fmt(p.an):"—", fmt(p.horasPago),
+    p.tarifa>0?fmtDinero(p.tarifa):"—", p.importe>0?fmtDinero(p.importe):"—"
+  ]);
   filasPers.push([
     {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "", "",
+    {content:fmt(R.totTrab), styles:{fontStyle:"bold"}},
     {content:fmt(R.totEx), styles:{fontStyle:"bold"}},
     {content:fmt(R.totAn), styles:{fontStyle:"bold"}},
-    {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}},
-    {content:t>0?fmtDinero(R.horasPagar*t):"—", styles:{fontStyle:"bold", textColor:[22,96,73]}}
+    {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}}, "",
+    {content:R.totalPagar>0?fmtDinero(R.totalPagar):"—", styles:{fontStyle:"bold", textColor:[22,96,73]}}
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Name","Position","Days","Worked","Overtime","Left early","Hours to pay","To pay ($)"]],
+    head:[["Name","Position","Days","Sched.","Worked","Overtime","Left early","Hours to pay","Rate","To pay ($)"]],
     body:filasPers,
-    styles:{fontSize:8.5, cellPadding:5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
+    styles:{fontSize:8, cellPadding:4}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]}
   });
   y = doc.lastAutoTable.finalY + 16;
 
@@ -567,9 +1006,9 @@ function descargarReporte(){
   doc.roundedRect(mx, y, 595 - mx*2, 42, 6, 6, "F");
   doc.setFontSize(11); doc.setTextColor(22,96,73); doc.setFont("helvetica","bold");
   doc.text(
-    t > 0
-      ? `TOTAL TO PAY: ${fmtDinero(R.horasPagar*t)}   (${fmt(R.horasPagar)} at ${fmtDinero(t)} per hour)`
-      : `TOTAL HOURS TO PAY: ${fmt(R.horasPagar)}`,
+    R.totalPagar > 0
+      ? `TOTAL TO PAY: ${fmtDinero(R.totalPagar)}   (${fmt(R.horasPagar)} — ${etiquetaBase()})`
+      : `TOTAL HOURS TO PAY: ${fmt(R.horasPagar)} — ${etiquetaBase()} (no rates set)`,
     mx + 14, y + 26);
   doc.setFont("helvetica","normal");
   y += 42 + 22;
