@@ -870,22 +870,21 @@ function descargarReporte(){
   let y = 50;
 
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(28,36,34);
-  doc.text("Event Hours Report", mx, y); y += 22;
+  doc.text("Overtime Report", mx, y); y += 22;
   doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(60,70,66);
   if(infoEvento.numero){ doc.text(`Event ID: ${infoEvento.numero}`, mx, y); y += 15; }
   if(infoEvento.fecha){ doc.text(`Event date: ${infoEvento.fecha}`, mx, y); y += 15; }
   if(infoEvento.direccion){ doc.text(`Address: ${infoEvento.direccion}`, mx, y); y += 15; }
   if(nombreArchivo){ doc.text(doc.splitTextToSize(`Source files: ${nombreArchivo}`, 595 - mx*2), mx, y); y += 15; }
-  doc.text(`Paying ${etiquetaBase()}`, mx, y); y += 15;
-  y += 10;
+  y += 12;
 
+  // Tarjetas: solo horas
   const cardW = (595 - mx*2 - 30) / 4;
   const tarjetas = [
-    {etq:"OVERTIME HOURS", val:fmt(R.totEx), sub:`${R.conExtra} of ${R.totalPersonas} people`, color:[185,116,22]},
-    {etq:"OVERTIME PAY", val:R.costoExtra>0?fmtDinero(R.costoExtra):"—", sub:"included in the total", color:[185,116,22]},
-    {etq:"HOURS TO PAY", val:fmt(R.horasPagar), sub:etiquetaBase(), color:[22,96,73]},
-    {etq:"TOTAL TO PAY", val:R.totalPagar>0?fmtDinero(R.totalPagar):"—",
-     sub:R.sinTarifa>0?`${R.sinTarifa} without rate`:"all rates set", color:[22,96,73]}
+    {etq:"OVERTIME HOURS", val:fmt(R.totEx), sub:"total", color:[185,116,22]},
+    {etq:"WITH OVERTIME", val:`${R.conExtra} of ${R.totalPersonas}`, sub:"people", color:[185,116,22]},
+    {etq:"LEFT EARLY", val:fmt(R.totAn), sub:`${R.seFueronAntes} ${R.seFueronAntes===1?"person":"people"}`, color:[178,59,42]},
+    {etq:"HOURS WORKED", val:fmt(R.totTrab), sub:`scheduled ${fmt(R.totProg)}`, color:[22,96,73]}
   ];
   tarjetas.forEach((c,i)=>{
     const x = mx + i*(cardW+10);
@@ -900,94 +899,72 @@ function descargarReporte(){
   });
   y += 60 + 24;
 
-  // Por posición
+  // Overtime por posición
   doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
-  doc.text("By position", mx, y);
+  doc.text("Overtime by position", mx, y);
   const filasRol = Object.keys(R.porRol).map(rol=>{
     const v = R.porRol[rol];
-    return [labelPos(rol), v.personas, v.ex>0?fmt(v.ex):"—", v.importeExtra>0?fmtDinero(v.importeExtra):"—",
-      fmt(v.horas), textoTarifaRol(v), v.importe>0?fmtDinero(v.importe):"—"];
+    return [labelPos(rol), v.personas, v.conExtra, v.ex>0?fmt(v.ex):"—",
+      fmt(v.horas), v.an>0?fmt(v.an):"—"];
   });
   filasRol.push([
     {content:"TOTAL", styles:{fontStyle:"bold"}},
     {content:R.totalPersonas, styles:{fontStyle:"bold"}},
-    {content:fmt(R.totEx), styles:{fontStyle:"bold"}},
-    {content:R.costoExtra>0?fmtDinero(R.costoExtra):"—", styles:{fontStyle:"bold"}},
-    {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}},
-    "",
-    {content:R.totalPagar>0?fmtDinero(R.totalPagar):"—", styles:{fontStyle:"bold", textColor:[22,96,73]}}
+    {content:R.conExtra, styles:{fontStyle:"bold"}},
+    {content:fmt(R.totEx), styles:{fontStyle:"bold", textColor:[185,116,22]}},
+    {content:fmt(R.totTrab), styles:{fontStyle:"bold"}},
+    {content:fmt(R.totAn), styles:{fontStyle:"bold"}}
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Position","People","Overtime","Overtime pay","Hours to pay","Rate ($/h)","To pay ($)"]],
+    head:[["Position","People","With overtime","Overtime hours","Hours worked","Left early"]],
     body:filasRol,
     styles:{fontSize:10, cellPadding:7.5}, headStyles:{fillColor:[241,244,242], textColor:[28,36,34]},
-    columnStyles:{1:{halign:"right"}, 2:{halign:"right"}, 3:{halign:"right"}, 4:{halign:"right"}, 5:{halign:"right"}, 6:{halign:"right"}}
+    columnStyles:{1:{halign:"right"}, 2:{halign:"right"}, 3:{halign:"right", fillColor:[251,243,228]},
+      4:{halign:"right"}, 5:{halign:"right"}}
   });
   y = doc.lastAutoTable.finalY + 22;
 
-  // Bloque total
+  // Total de overtime
   if(y > 720){ doc.addPage(); y = 50; }
   doc.setFillColor(251,243,228);
-  doc.roundedRect(mx, y, 595 - mx*2, 34, 6, 6, "F");
-  doc.setFontSize(10.5); doc.setTextColor(185,116,22); doc.setFont("helvetica","bold");
-  doc.text(
-    `TOTAL OVERTIME: ${fmt(R.totEx)}` + (R.costoExtra > 0 ? `   =   ${fmtDinero(R.costoExtra)}` : ""),
-    mx + 14, y + 22);
-  y += 34 + 8;
-
-  doc.setFillColor(226,239,234);
   doc.roundedRect(mx, y, 595 - mx*2, 42, 6, 6, "F");
-  doc.setFontSize(11); doc.setTextColor(22,96,73);
-  doc.text(
-    R.totalPagar > 0
-      ? `TOTAL TO PAY: ${fmtDinero(R.totalPagar)}   (${fmt(R.horasPagar)} — ${etiquetaBase()})`
-      : `TOTAL HOURS TO PAY: ${fmt(R.horasPagar)} — ${etiquetaBase()} (no rates set)`,
-    mx + 14, y + 26);
+  doc.setFontSize(12); doc.setTextColor(185,116,22); doc.setFont("helvetica","bold");
+  doc.text(`TOTAL OVERTIME: ${fmt(R.totEx)}`, mx + 14, y + 26);
   doc.setFont("helvetica","normal");
   y += 42 + 22;
 
   if(detalleReporte() === "completo") anexoPorPersona(doc, R, mx, y);
 
-  doc.save(`event-report-${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`overtime-report-${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
-/* Detalle persona a persona, con sus horas extra */
+/* Detalle persona a persona, también solo con horas */
 function anexoPorPersona(doc, R, mx, y){
   if(y > 600){ doc.addPage(); y = 50; }
   doc.setFontSize(12); doc.setTextColor(28,36,34); doc.setFont("helvetica","bold");
   doc.text("By person — scheduled vs actual", mx, y);
   const filasPers = R.personas.map(p=>[
-    p.nombre, labelPos(p.rol), turnoProg(p, "\n"), turnoReal(p, "\n"), fmt(p.prog), fmt(p.trab),
-    p.ex>0?fmt(p.ex):"—", p.an>0?fmt(p.an):"—", fmt(p.horasPago),
-    p.tarifa>0?fmtDinero(p.tarifa):"—",
-    p.importeExtra>0?fmtDinero(p.importeExtra):"—",
-    p.importe>0?fmtDinero(p.importe):"—"
+    p.nombre, labelPos(p.rol), turnoProg(p, "\n"), turnoReal(p, "\n"),
+    fmt(p.prog), fmt(p.trab), p.ex>0?fmt(p.ex):"—", p.an>0?fmt(p.an):"—"
   ]);
   filasPers.push([
     {content:"TOTAL", styles:{fontStyle:"bold"}}, "", "", "",
     {content:fmt(R.totProg), styles:{fontStyle:"bold"}},
     {content:fmt(R.totTrab), styles:{fontStyle:"bold"}},
     {content:fmt(R.totEx), styles:{fontStyle:"bold", textColor:[185,116,22]}},
-    {content:fmt(R.totAn), styles:{fontStyle:"bold"}},
-    {content:fmt(R.horasPagar), styles:{fontStyle:"bold"}}, "",
-    {content:R.costoExtra>0?fmtDinero(R.costoExtra):"—", styles:{fontStyle:"bold", textColor:[185,116,22]}},
-    {content:R.totalPagar>0?fmtDinero(R.totalPagar):"—", styles:{fontStyle:"bold", textColor:[22,96,73]}}
+    {content:fmt(R.totAn), styles:{fontStyle:"bold"}}
   ]);
   doc.autoTable({
     startY:y+10, margin:{left:mx,right:mx},
-    head:[["Name","Position","Scheduled","Actual","Sched. h","Worked","Overtime","Left early","Hours to pay","Rate","Overtime pay","To pay ($)"]],
+    head:[["Name","Position","Scheduled","Actual","Sched. h","Worked","Overtime","Left early"]],
     body:filasPers,
-    styles:{fontSize:7, cellPadding:3.5, overflow:"linebreak"},
-    headStyles:{fillColor:[241,244,242], textColor:[28,36,34], fontSize:6.5},
-    columnStyles:{
-      0:{cellWidth:70}, 1:{cellWidth:44}, 2:{cellWidth:54}, 3:{cellWidth:54, fontStyle:"bold"},
-      6:{fillColor:[251,243,228]}, 9:{cellWidth:32}, 10:{cellWidth:42, fillColor:[251,243,228]}, 11:{cellWidth:42}
-    }
+    styles:{fontSize:8.5, cellPadding:5, overflow:"linebreak"},
+    headStyles:{fillColor:[241,244,242], textColor:[28,36,34]},
+    columnStyles:{0:{cellWidth:110}, 1:{cellWidth:72}, 2:{cellWidth:74}, 3:{cellWidth:74, fontStyle:"bold"},
+      6:{fillColor:[251,243,228]}}
   });
-  return doc.lastAutoTable.finalY + 22;
 }
-
 </script>
 </body>
 </html>
